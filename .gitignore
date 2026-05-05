@@ -1,1 +1,23 @@
 .DS_Store
+
+# Per agent rules: _dev folders for transient artifacts that must never be committed
+/docs_dev/
+/scripts_dev/
+/samples_dev/
+/examples_dev/
+/tests_dev/
+/downloads_dev/
+/libs_dev/
+/builds_dev/
+/reports/
+/reports_dev/
+
+# Python bytecode caches
+__pycache__/
+*.pyc
+
+# Janitor runtime state
+/.janitor/
+
+# Rechecker plugin runtime state
+/.rechecker/
