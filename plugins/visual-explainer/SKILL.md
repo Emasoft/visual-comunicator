@@ -105,17 +105,23 @@ If the user picked the free-text "Other" row, `data.text` contains what they typ
 - **Enter** triggers Submit/Exit globally (skipped if focus is in an `<input>`/`<textarea>`)
 - Two physical buttons — **top-right** and **bottom-left** — both labeled `Exit` when empty, `Submit (N)` when non-empty
 
-### Multi-click text selection (Phase 2, `[data-ve-prose]` only)
+### Multi-click text selection (Phases 2+3, `[data-ve-prose]` only)
 
-Inside any `<article data-ve-prose>` / `<main data-ve-prose>` container, clicks on text content trigger graduated selection:
+Inside any `<article data-ve-prose>` / `<main data-ve-prose>` container, clicks on text content trigger graduated selection. Depths 1-3 paint a sub-paragraph fragment (inline `<span>`); depths 4-7 climb the paragraph-numbering hierarchy and paint whole elements:
 
-| Click count (≤500ms apart, ≤8px) | Result |
-|----------------------------------|--------|
-| 1 click | single grapheme (handles emoji, surrogate pairs) at the cursor |
-| 2 clicks | the surrounding word (Intl.Segmenter, locale-aware) |
-| 3 clicks | a "block" — non-whitespace run, stopping at brackets / operators, **but keeping comma+dot inside numbers**: `10,000,000.00` (US) and `10.000.000,00` (IT) stay whole |
+| Click count (≤500ms apart, ≤8px) | Scope | Painted via |
+|----------------------------------|-------|-------------|
+| 1 click  | single grapheme (handles emoji, surrogate pairs) at the cursor | inline `<span class="ve-text-sel">` |
+| 2 clicks | the surrounding word (Intl.Segmenter, locale-aware) | inline span |
+| 3 clicks | a "block" — non-whitespace run, stopping at brackets / quote marks, **but keeping comma+dot inside numbers**: `10,000,000.00` (US) and `10.000.000,00` (IT) stay whole | inline span |
+| 4 clicks | the **paragraph** containing the click (single `[data-ve-pnum]`) | `[data-ve-text-sel-block]` attribute |
+| 5 clicks | the **section** (chop one segment from the paragraph number — `1.2.1` → `1.2`, painting every `[data-ve-pnum]` whose number equals or starts with `1.2.`) | `[data-ve-text-sel-block]` |
+| 6 clicks | the **chapter** (keep first segment — `1.2.1` → `1`, painting every `[data-ve-pnum]` under chapter `1`) | `[data-ve-text-sel-block]` |
+| 7 clicks | **all prose** in the container (every `[data-ve-pnum]`) | `[data-ve-text-sel-block]` |
 
-Each chain produces ONE `kind:"text"` entry at the final depth. Per the user's spec, **multi-click never deselects** — once an entry is in `veSelection`, only ESC or a drag-deselect (Phase 4) removes it. A new chain after the 500ms grace adds another entry on top.
+Each chain produces ONE `kind:"text"` entry at the final depth — replacing whatever the previous click in the chain produced. Per the user's spec, **multi-click never deselects** — once an entry is in `veSelection`, only ESC or a drag-deselect (Phase 4) removes it. A new chain after the 500ms grace adds another entry on top.
+
+For depths 4-7, the wire payload's `text` field carries the concatenated text of every painted element (capped at 5000 chars), and `paragraphId` is the **first** painted paragraph's number — the agent can derive scope from `depth` plus the depth-to-scope rules above. Block-level entries skip the inline `surroundContents` path entirely (which would throw on cross-element ranges) and instead set `data-ve-text-sel-block="<entryId>"` on every element in scope; the runtime's auto-injected CSS rule (`color-mix(in srgb, var(--ve-accent, #b8861f) 16%, transparent)` background + 1 px outline) paints them. Removal walks the DOM for matching elements and clears the attribute.
 
 Locale rules read **`<html lang>` only** — `navigator.language` is unreliable on Safari mobile. Recognized European locales (`it`, `de`, `nl`, …) get period-thousand-comma-decimal grammar; French-family (`fr`, `fi`, `et`, `lt`, `sv`) gets space-thousand-comma-decimal. Anything else falls back to US format.
 

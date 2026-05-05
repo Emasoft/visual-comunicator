@@ -287,6 +287,18 @@
       '  padding: 0 1px;',
       '  cursor: text;',
       '}',
+      // Phase 3 — block-level highlight for depths 4-7 (paragraph,
+      // section, chapter, all). Lighter background than .ve-text-sel
+      // because it covers a much larger area and darker tones become
+      // overpowering. The data-ve-text-sel-block attribute carries the
+      // entryId, so multiple block selections can co-exist with
+      // independent IDs.
+      '[data-ve-text-sel-block] {',
+      '  background: color-mix(in srgb, var(--ve-accent, #b8861f) 16%, transparent);',
+      '  border-radius: 4px;',
+      '  outline: 1px solid color-mix(in srgb, var(--ve-accent, #b8861f) 50%, transparent);',
+      '  outline-offset: 2px;',
+      '}',
       // Mermaid nodes (handled separately because their .node class isn\'t
       // wrapped in [data-ve-id] until veSelectMermaid is wired):
       '.mermaid .node { cursor:pointer; }',
@@ -2585,13 +2597,88 @@
     return entryId;
   }
 
+  // ─────────────────────────────────────────────────────────────────────
+  // Phase 3 — block-level text selection (depths 4-7).
+  //
+  // Depths 1-3 wrap a sub-paragraph fragment in a <span> via
+  // surroundContents. Depths 4+ span across paragraph (or larger)
+  // boundaries, so surroundContents would throw — instead we mark the
+  // affected ELEMENTS with [data-ve-text-sel-block="<entryId>"] and
+  // paint via CSS. Removal walks the DOM for matching elements.
+  //
+  // Scope by paragraph-numbering hierarchy (the existing numberProse()
+  // assigns data-ve-pnum like "1.2.1"):
+  //   depth 4 = paragraph     (single [data-ve-pnum] element)
+  //   depth 5 = section       (chop one segment: "1.2.1" → "1.2",
+  //                            select all elements with pnum "1.2"
+  //                            or starting with "1.2.")
+  //   depth 6 = chapter       (keep first segment: "1.2.1" → "1",
+  //                            select all elements with pnum "1"
+  //                            or starting with "1.")
+  //   depth 7 = ALL prose     (every [data-ve-pnum] in the page)
+  // ─────────────────────────────────────────────────────────────────────
+
+  function pnumScope(currentPnum, depth) {
+    if (!currentPnum) return null;
+    if (depth === 4) return currentPnum;
+    var parts = currentPnum.split('.');
+    if (depth === 5) parts.pop();
+    else if (depth === 6) parts = [parts[0]];
+    return parts.join('.');
+  }
+
+  function elementsInPnumScope(scope) {
+    if (!scope) return [];
+    var els = document.querySelectorAll('[data-ve-prose] [data-ve-pnum]');
+    var matches = [];
+    var prefix = scope + '.';
+    for (var i = 0; i < els.length; i++) {
+      var p = els[i].getAttribute('data-ve-pnum');
+      if (p === scope || p.indexOf(prefix) === 0) matches.push(els[i]);
+    }
+    return matches;
+  }
+
+  function paintBlockSelection(elements, depth) {
+    if (!elements || elements.length === 0) return null;
+    var entryId = 'text:' + Date.now() + ':' + Math.random().toString(36).slice(2, 8);
+    for (var i = 0; i < elements.length; i++) {
+      elements[i].setAttribute('data-ve-text-sel-block', entryId);
+    }
+    var combined = '';
+    for (var j = 0; j < elements.length; j++) {
+      combined += (elements[j].textContent || '') + ' ';
+      if (combined.length > 8000) break; // hard cap on collected text
+    }
+    combined = combined.replace(/\s+/g, ' ').trim();
+    var firstPara = elements[0];
+    var pnum = firstPara && firstPara.getAttribute ? firstPara.getAttribute('data-ve-pnum') : null;
+    veSelection.push({
+      kind: 'text',
+      entryId: entryId,
+      text: combined.slice(0, 5000),
+      depth: depth,
+      paragraphId: pnum,
+      paragraphText: combined.slice(0, 240)
+    });
+    updateSubmitButtonsState();
+    return entryId;
+  }
+
   function removeTextSelection(entryId) {
+    // Inline span entry (depths 1-3): unwrap.
     var span = document.querySelector('[data-ve-text-sel="' + entryId + '"]');
     if (span && span.parentNode) {
       var parent = span.parentNode;
       while (span.firstChild) parent.insertBefore(span.firstChild, span);
       parent.removeChild(span);
       if (parent.normalize) parent.normalize();
+    }
+    // Block-attribute entry (depths 4-7): clear the marker on every
+    // element that was painted under this entryId.
+    var blocks = document.querySelectorAll('[data-ve-text-sel-block="' + entryId + '"]');
+    for (var b = 0; b < blocks.length; b++) {
+      blocks[b].removeAttribute('data-ve-text-sel-block');
     }
     for (var i = 0; i < veSelection.length; i++) {
       if (veSelection[i].entryId === entryId) {
@@ -2611,6 +2698,10 @@
       while (s.firstChild) parent.insertBefore(s.firstChild, s);
       parent.removeChild(s);
       if (parent.normalize) parent.normalize();
+    }
+    var blocks = document.querySelectorAll('[data-ve-text-sel-block]');
+    for (var k = 0; k < blocks.length; k++) {
+      blocks[k].removeAttribute('data-ve-text-sel-block');
     }
     for (var j = veSelection.length - 1; j >= 0; j--) {
       if (veSelection[j].kind === 'text') veSelection.splice(j, 1);
@@ -2644,7 +2735,7 @@
       // across element boundaries (the wrapping span + adjacent sibling
       // text nodes), and surroundContents() throws on those.
       if (lastClickChain.entryId) removeTextSelection(lastClickChain.entryId);
-      lastClickChain.depth = Math.min(lastClickChain.depth + 1, 3);
+      lastClickChain.depth = Math.min(lastClickChain.depth + 1, 7);
     } else {
       lastClickChain = {x: clickX, y: clickY, depth: 1, entryId: null, time: now};
     }
@@ -2657,11 +2748,37 @@
     var textNode = pos.node;
     var idx = pos.offset;
     var range = null;
-    if (lastClickChain.depth === 1)      range = buildLetterRange(textNode, idx);
-    else if (lastClickChain.depth === 2) range = buildWordRange(textNode, idx);
-    else                                  range = buildBlockRange(textNode, idx);
-    if (!range) return;
-    var entryId = paintTextSelection(range, lastClickChain.depth, ev.target);
+    var entryId = null;
+    if (lastClickChain.depth <= 3) {
+      // Inline path: surroundContents wraps a sub-paragraph fragment.
+      if (lastClickChain.depth === 1)      range = buildLetterRange(textNode, idx);
+      else if (lastClickChain.depth === 2) range = buildWordRange(textNode, idx);
+      else                                  range = buildBlockRange(textNode, idx);
+      if (!range) return;
+      entryId = paintTextSelection(range, lastClickChain.depth, ev.target);
+    } else {
+      // Block path (Phase 3, depths 4-7): mark whole [data-ve-pnum]
+      // elements via [data-ve-text-sel-block]. Scope follows the
+      // paragraph-numbering hierarchy (see pnumScope above).
+      var paraEl = paragraphFromNode(textNode);
+      var pnum = paraEl && paraEl.getAttribute ? paraEl.getAttribute('data-ve-pnum') : null;
+      if (!pnum) {
+        // No numbered paragraph at click point — degrade to block (depth 3).
+        range = buildBlockRange(textNode, idx);
+        if (range) entryId = paintTextSelection(range, 3, ev.target);
+        if (entryId) lastClickChain.depth = 3;
+      } else {
+        var elements;
+        if (lastClickChain.depth === 7) {
+          // ALL text inside the prose container.
+          elements = Array.from(document.querySelectorAll('[data-ve-prose] [data-ve-pnum]'));
+        } else {
+          var scope = pnumScope(pnum, lastClickChain.depth);
+          elements = elementsInPnumScope(scope);
+        }
+        entryId = paintBlockSelection(elements, lastClickChain.depth);
+      }
+    }
     if (entryId) {
       lastClickChain.entryId = entryId;
       lastClickChain.time = Date.now();

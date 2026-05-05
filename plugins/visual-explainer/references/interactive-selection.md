@@ -101,13 +101,19 @@ Each entry inside `selections[]` has these fields:
 
 ### Phase 2 — multi-click text selection inside `[data-ve-prose]`
 
-Clicks on text content inside any `[data-ve-prose]` container trigger graduated selection (1=letter, 2=word, 3=block) instead of toggling the whole paragraph. Each click within 500ms and 8px of the previous one bumps the depth, replacing the previous fragment; a new chain after the grace period starts at depth=1 again. Per the user spec, **multi-click NEVER deselects** — only ESC or a drag-deselect (Phase 4) removes a `text` entry.
+Clicks on text content inside any `[data-ve-prose]` container trigger graduated selection. **Depths 1-3** paint a sub-paragraph fragment via inline `<span class="ve-text-sel">` (Phase 2). **Depths 4-7** climb the paragraph-numbering hierarchy and paint whole elements via `[data-ve-text-sel-block]` (Phase 3 — see next sub-section).
 
-| Depth | Boundary detector |
-|------:|-------------------|
-| 1     | single grapheme (Intl.Segmenter, handles emoji + surrogate pairs) at the cursor character |
-| 2     | the surrounding word (Intl.Segmenter `granularity:'word'`, locale-aware) |
-| 3     | "block" — non-whitespace run that stops at brackets / operators / quote marks, but keeps comma and period when both neighbours are digits (so `10,000,000.00` and `10.000.000,00` and `3.14` stay whole) |
+Each click within 500ms and 8px of the previous one bumps the depth, replacing the previous selection; a new chain after the grace period starts at depth=1 again. Per the user spec, **multi-click NEVER deselects** — only ESC or a drag-deselect (Phase 4) removes a `text` entry.
+
+| Depth | Scope | Boundary detector |
+|------:|-------|-------------------|
+| 1     | grapheme | Intl.Segmenter `granularity:'grapheme'` — handles emoji + surrogate pairs at the cursor character |
+| 2     | word     | Intl.Segmenter `granularity:'word'` — locale-aware |
+| 3     | block    | non-whitespace run that stops at brackets / quote marks, but keeps comma and period when both neighbours are digits (so `10,000,000.00`, `10.000.000,00`, `3.14`, `1/2`, `9:30`, `name@host`, `12:34:56-05:00` all stay whole) |
+| 4     | paragraph | the single `[data-ve-pnum]` element under the click |
+| 5     | section  | chop one segment from the paragraph number (`1.2.1` → `1.2`); paint every `[data-ve-pnum]` whose number equals `1.2` or starts with `1.2.` |
+| 6     | chapter  | keep only the first segment (`1.2.1` → `1`); paint every `[data-ve-pnum]` under chapter `1` |
+| 7     | all prose | every `[data-ve-pnum]` inside the `[data-ve-prose]` container |
 
 Each `kind:"text"` payload entry carries:
 
@@ -128,6 +134,44 @@ The runtime injects a default `.ve-text-sel` style (`background: color-mix(in sr
 Locale comes from `<html lang>` only (per user feedback `navigator.language` is unreliable on Safari mobile). Default = US format. European locales (it, de, nl, da, nb, pt, pl, tr, vi, id, is, el, ru, uk, bg, hr, cs, hu, lv, mk, ro, sk, sl, bs, mt, sr) get period-thousand-comma-decimal; French-family (fr, fi, et, lt, sv) gets space-thousand-comma-decimal.
 
 Clicks land on text nodes via `caretPositionFromPoint` / `caretRangeFromPoint`. The chain is keyed by **screen coordinates**, not text-node identity — surroundContents splits text nodes, so the textNode reference is invalidated after the first paint and the chain would otherwise reset to depth=1 on every subsequent click.
+
+#### Phase 3 — block-level depths 4-7 (paragraph / section / chapter / all)
+
+At depth 4+, the selection no longer fits inside a single text node — it spans across paragraphs, sections, or even the whole article. The Phase 2 inline-span path can't represent this (Range.surroundContents throws on cross-element ranges), so depths 4-7 take a **block-attribute path** instead:
+
+1. The dispatcher in `handleProseClick` reads `lastClickChain.depth` and routes:
+   ```js
+   if (lastClickChain.depth <= 3) { /* inline path: surroundContents */ }
+   else                            { /* block path:  data-ve-text-sel-block */ }
+   ```
+2. The block path resolves the click to its containing `[data-ve-pnum]` element, reads its hierarchical number (`pnum`), then computes the **scope** — the prefix that every paragraph in the new selection must match:
+   ```js
+   function pnumScope(currentPnum, depth) {
+     if (depth === 4) return currentPnum;        // single paragraph
+     var parts = currentPnum.split('.');
+     if (depth === 5) parts.pop();                // chop one segment
+     else if (depth === 6) parts = [parts[0]];    // keep first segment
+     return parts.join('.');
+   }
+   ```
+3. `elementsInPnumScope(scope)` returns every `[data-ve-pnum]` whose number equals the scope or starts with `scope + "."` (for depth 7 it returns *every* numbered element in the prose container).
+4. `paintBlockSelection(elements, depth)` mints a single `entryId` and stamps `data-ve-text-sel-block="<entryId>"` on every element. The runtime auto-injects this CSS rule:
+   ```css
+   [data-ve-text-sel-block] {
+     background: color-mix(in srgb, var(--ve-accent, #b8861f) 16%, transparent);
+     border-radius: 4px;
+     outline: 1px solid color-mix(in srgb, var(--ve-accent, #b8861f) 50%, transparent);
+     outline-offset: 2px;
+   }
+   ```
+   The 16% tint is deliberately lighter than `.ve-text-sel`'s 32% — block selections cover a much larger area and a darker tone overpowers the page.
+5. `removeTextSelection(entryId)` walks **both** paths — it unwraps any inline span AND clears the `data-ve-text-sel-block` attribute on every matching element. Same for `clearAllTextSelections()` (ESC). This means `removeTextSelection` is safe to call regardless of which depth produced the entry.
+
+**Wire-format note for depths 4-7**: `text` is the concatenation of every painted element's `textContent`, joined with single spaces and capped at 5000 chars. `paragraphId` is the **first** painted paragraph's number (so the agent can derive the full scope from `paragraphId + depth + the depth-to-scope rules above`). `paragraphText` is the same buffer truncated to 240 chars.
+
+**Degradation rule**: if the click lands inside `[data-ve-prose]` but on text outside any `[data-ve-pnum]` (e.g. a non-numbered intro paragraph), the runtime falls back to depth-3 block selection — chain depth is also reset to 3 so the next click still bumps to 4. This avoids the "click did nothing" UX failure when the page author forgot to wrap a paragraph.
+
+**Verification baseline** (from `tests_dev/prose-depths-1-7.html`, 2026-05-05): clicking the second word of paragraph "1.1.1" with 700ms gaps produced strictly increasing scopes — d1=" " (single grapheme), d2=" " (word), d3="Third" (block), d4=full paragraph 1.1.1, d5=section 1.1 (3 paragraphs), d6=chapter 1 (5 paragraphs), d7=all 7 paragraphs across both chapters. The 700ms gap is required because shorter gaps stay within the 500ms grace window and accumulate the wrong chain.
 
 **Timeout/error sentinels** (the runner emits these when no submission arrives or when something is structurally wrong) keep their old shape too: `{"id": null, "reason": "timeout|no-file|missing-file|no-browser|...", ...}`.
 
