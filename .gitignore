@@ -21,3 +21,10 @@ __pycache__/
 
 # Rechecker plugin runtime state
 /.rechecker/
+
+# Claude Code session artefacts (chat history, scheduled crons, lock files)
+/.claude/
+
+# tldr CLI runtime state + per-project ignore file
+/.tldr/
+/.tldrignore
