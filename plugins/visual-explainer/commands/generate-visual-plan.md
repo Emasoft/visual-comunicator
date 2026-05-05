@@ -102,6 +102,8 @@ Verify each against the code. If something cannot be verified, mark it as uncert
 - Never use `display: flex` on `<li>` for markers — use absolute positioning
 - Test tables with wide content don't overflow their container
 
-Write to `~/.agent/diagrams/` with a descriptive filename (e.g., `feature-name-plan.html`). Open the result in the browser. Tell the user the file path.
+**Interactive selection:** every section card, state-machine node, file entry, edge case, and KPI must carry `data-ve-id` / `data-ve-type` / `data-ve-label`; the Mermaid state machine needs `click X call veSelectMermaid(...)` directives plus `securityLevel: 'loose'`; embed `<script src="ve-runtime.js"></script>` at end of body. If you want to ask the user to choose between alternative implementations, render the alternatives as a `data-ve-mode="single"` table-form so the answer comes back structured. See `./references/interactive-selection.md`.
+
+Write to `~/.agent/diagrams/` with a descriptive filename (e.g., `feature-name-plan.html`). Open it via the interactive selection runner (`python3 <skill-dir>/scripts/ve-select.py ~/.agent/diagrams/<file>.html`) and respond to whatever the user clicks per the SKILL.md follow-up template. Tell the user the file path.
 
 Ultrathink.

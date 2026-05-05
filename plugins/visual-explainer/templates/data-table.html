@@ -407,19 +407,19 @@
   <p class="subtitle animate" style="--i:1">victoria's email vs. implementation plan &mdash; point-by-point review</p>
 
   <div class="kpi-row animate" style="--i:2">
-    <div class="kpi-card">
+    <div class="kpi-card" data-ve-id="kpi-items-reviewed" data-ve-type="kpi" data-ve-label="14 items reviewed">
       <div class="kpi-card__value">14</div>
       <div class="kpi-card__label">Items Reviewed</div>
     </div>
-    <div class="kpi-card">
+    <div class="kpi-card" data-ve-id="kpi-match" data-ve-type="kpi" data-ve-label="13 matches">
       <div class="kpi-card__value kpi-card__value--green">13</div>
       <div class="kpi-card__label">Match</div>
     </div>
-    <div class="kpi-card">
+    <div class="kpi-card" data-ve-id="kpi-gap" data-ve-type="kpi" data-ve-label="1 gap">
       <div class="kpi-card__value kpi-card__value--red">1</div>
       <div class="kpi-card__label">Gap</div>
     </div>
-    <div class="kpi-card">
+    <div class="kpi-card" data-ve-id="kpi-coverage" data-ve-type="kpi" data-ve-label="93% coverage">
       <div class="kpi-card__value" style="color:var(--accent)">93%</div>
       <div class="kpi-card__label">Coverage</div>
     </div>
@@ -441,73 +441,76 @@
             <th>Status</th>
           </tr>
         </thead>
+        <!-- Mode A — passive selection: every row is independently clickable.
+             The runtime resolves the closest [data-ve-id] ancestor of the
+             click target, so cells inside still bubble up to the row. -->
         <tbody>
-          <tr style="--i:4">
+          <tr style="--i:4"  data-ve-id="req-template-scope" data-ve-type="table-row" data-ve-label="Template scope: yoth-special-edition">
             <td class="wide">Template: <code>yoth-special-edition</code> only</td>
             <td class="wide">Plan scopes everything to this template.</td>
             <td><span class="status status--match">Match</span></td>
           </tr>
-          <tr style="--i:5">
+          <tr style="--i:5"  data-ve-id="req-deadline" data-ve-type="table-row" data-ve-label="Deadline: EOD Friday, launch Tue AM">
             <td class="wide">EOD tomorrow (Friday), Tuesday AM launch</td>
             <td class="wide">Plan header says same.</td>
             <td><span class="status status--match">Match</span></td>
           </tr>
-          <tr style="--i:6">
+          <tr style="--i:6"  data-ve-id="req-bis-text" data-ve-type="table-row" data-ve-label="BIS button label and modal text">
             <td class="wide">Update BIS button label and pop up text</td>
             <td class="wide">Button text + modal description configurable via settings.</td>
             <td><span class="status status--match">Match</span></td>
           </tr>
-          <tr style="--i:7">
+          <tr style="--i:7"  data-ve-id="req-stoq-api" data-ve-type="table-row" data-ve-label="Stoq API events">
             <td class="wide">Use Stoq's API to trigger events</td>
             <td class="wide">Uses <code>openInlineForm</code>, <code>openModal</code>, <code>removeInlineForm</code>.</td>
             <td><span class="status status--match">Match</span></td>
           </tr>
-          <tr style="--i:8">
+          <tr style="--i:8"  data-ve-id="req-buy-buttons" data-ve-type="table-row" data-ve-label="Custom button + modal in buy_buttons">
             <td class="wide">Custom button + modal with text settings in buy buttons block</td>
             <td class="wide">Schema settings in <code>buy_buttons</code> block.</td>
             <td><span class="status status--match">Match</span></td>
           </tr>
-          <tr style="--i:9">
+          <tr style="--i:9"  data-ve-id="req-defaults" data-ve-type="table-row" data-ve-label="Defaults when empty">
             <td class="wide">Default values = current behavior when empty</td>
             <td class="wide">Blank settings = Stoq default "Notify Me" behavior.</td>
             <td><span class="status status--match">Match</span></td>
           </tr>
-          <tr style="--i:10">
+          <tr style="--i:10" data-ve-id="req-oos-only" data-ve-type="table-row" data-ve-label="OOS variants only">
             <td class="wide">Only display for OOS variants</td>
             <td class="wide">DOM-based sold-out detection.</td>
             <td><span class="status status--match">Match</span></td>
           </tr>
-          <tr style="--i:11">
+          <tr style="--i:11" data-ve-id="req-exclude-tag" data-ve-type="table-row" data-ve-label="Exclude products with excludebis tag">
             <td class="wide">Exclude products with <code>excludebis</code> tag</td>
             <td class="wide">Checked in both PDP and PLP Liquid.</td>
             <td><span class="status status--match">Match</span></td>
           </tr>
-          <tr style="--i:12">
+          <tr style="--i:12" data-ve-id="req-openinlineform" data-ve-type="table-row" data-ve-label="openInlineForm in modal">
             <td class="wide"><code>openInlineForm</code> to load Stoq form in modal</td>
             <td class="wide">PDP modal uses <code>openInlineForm</code>.</td>
             <td><span class="status status--match">Match</span></td>
           </tr>
-          <tr style="--i:13">
+          <tr style="--i:13" data-ve-id="req-button-label" data-ve-type="table-row" data-ve-label="Button label: Join the waitlist">
             <td class="wide">Updated Button Label: "Join the waitlist"</td>
             <td class="wide">Pre-populated in template JSON.</td>
             <td><span class="status status--match">Match</span></td>
           </tr>
-          <tr style="--i:14">
+          <tr style="--i:14" data-ve-id="req-popup-text" data-ve-type="table-row" data-ve-label="Pop-up text">
             <td class="wide">Updated Pop Up Text: "Sign up to be notified when we restock this or other embroidered styles."</td>
             <td class="wide"><code>bis_modal_description</code> setting.</td>
             <td><span class="status status--match">Match</span></td>
           </tr>
-          <tr style="--i:15">
+          <tr style="--i:15" data-ve-id="req-theme-clone" data-ve-type="table-row" data-ve-label="Theme: Giddy Up D2C Launch">
             <td class="wide">Theme: Huha 2.0 - Giddy Up Collection D2C Launch</td>
             <td class="wide">Clone ID <code>145580556374</code>.</td>
             <td><span class="status status--match">Match</span></td>
           </tr>
-          <tr style="--i:16">
+          <tr style="--i:16" data-ve-id="req-local-dev" data-ve-type="table-row" data-ve-label="Local dev workflow">
             <td class="wide">Changes made locally</td>
             <td class="wide">Local dev + theme push.</td>
             <td><span class="status status--match">Match</span></td>
           </tr>
-          <tr style="--i:17">
+          <tr style="--i:17" data-ve-id="req-submit-event" data-ve-type="table-row" data-ve-label="GAP: stoq:restock-modal:submitted not in plan">
             <td class="wide">Run <code>stoq:restock-modal:submitted</code> when form is submitted</td>
             <td class="wide">Not mentioned in plan.
               <small>When using <code>openInlineForm</code> inside a custom modal, unclear if Stoq fires this event automatically or if manual dispatch is needed.</small>
@@ -534,7 +537,100 @@
     </div>
   </details>
 
+  <!-- ========================================================
+       MODE B — single-choice question (radio).
+       Authoring rule: data-ve-type="table-form" + data-ve-mode="single".
+       The runtime injects radios + a Submit button. Returns one selection.
+       ======================================================== -->
+  <h2 class="animate" style="--i:20;font-size:22px;margin:36px 0 8px;">How should we resolve the gap?</h2>
+  <p class="subtitle animate" style="--i:21;margin-bottom:18px;">single-choice form mode demo</p>
+  <div class="table-wrap animate" style="--i:22">
+    <table class="data-table"
+           data-ve-id="gap-resolution"
+           data-ve-type="table-form"
+           data-ve-mode="single"
+           data-ve-label="How should we resolve the gap?">
+      <thead>
+        <tr><th class="wide">Option</th><th class="wide">Tradeoff</th></tr>
+      </thead>
+      <tbody>
+        <tr data-ve-row-id="opt-dispatch"
+            data-ve-row-label="Add explicit dispatchEvent">
+          <td class="wide">Add explicit <code>dispatchEvent</code></td>
+          <td class="wide">Belt-and-braces; works regardless of Stoq's behaviour.</td>
+        </tr>
+        <tr data-ve-row-id="opt-confirm"
+            data-ve-row-label="Confirm with Stoq support first">
+          <td class="wide">Confirm with Stoq support first</td>
+          <td class="wide">Slower, but avoids duplicate events if Stoq already fires it.</td>
+        </tr>
+        <tr data-ve-row-id="opt-defer"
+            data-ve-row-label="Defer to post-launch follow-up">
+          <td class="wide">Defer to post-launch follow-up</td>
+          <td class="wide">Risky — silent break could ship to production.</td>
+        </tr>
+        <tr data-ve-row-id="__text" data-ve-row-text="1"
+            data-ve-row-label="Other approach">
+          <td class="wide" colspan="2">
+            <input type="text"
+                   placeholder="Write something else here:"
+                   style="width:100%;padding:8px 10px;background:transparent;color:inherit;border:1px solid var(--border-bright);border-radius:6px;font:inherit;">
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ========================================================
+       MODE C — multi-choice question (checkboxes).
+       Same shape as Mode B, but data-ve-mode="multi". Submit returns
+       every checked row in `data.selected[]`.
+       ======================================================== -->
+  <h2 class="animate" style="--i:23;font-size:22px;margin:36px 0 8px;">Which checks should we add to the smoke suite?</h2>
+  <p class="subtitle animate" style="--i:24;margin-bottom:18px;">multi-choice form mode demo</p>
+  <div class="table-wrap animate" style="--i:25">
+    <table class="data-table"
+           data-ve-id="smoke-suite"
+           data-ve-type="table-form"
+           data-ve-mode="multi"
+           data-ve-label="Which checks should we add to the smoke suite?">
+      <thead>
+        <tr><th class="wide">Check</th><th>Effort</th></tr>
+      </thead>
+      <tbody>
+        <tr data-ve-row-id="chk-event-fired" data-ve-row-label="Verify submitted event is fired">
+          <td class="wide">Verify <code>stoq:restock-modal:submitted</code> is fired</td>
+          <td>1h</td>
+        </tr>
+        <tr data-ve-row-id="chk-modal-open" data-ve-row-label="Modal opens for OOS variant">
+          <td class="wide">Modal opens for OOS variant</td>
+          <td>30min</td>
+        </tr>
+        <tr data-ve-row-id="chk-excludebis" data-ve-row-label="excludebis tag suppresses button">
+          <td class="wide"><code>excludebis</code> tag suppresses button</td>
+          <td>30min</td>
+        </tr>
+        <tr data-ve-row-id="chk-button-label" data-ve-row-label="Button label and modal text render correctly">
+          <td class="wide">Button label and modal text render correctly</td>
+          <td>15min</td>
+        </tr>
+        <tr data-ve-row-id="__text" data-ve-row-text="1"
+            data-ve-row-label="Other check">
+          <td class="wide" colspan="2">
+            <input type="text"
+                   placeholder="Write something else here:"
+                   style="width:100%;padding:8px 10px;background:transparent;color:inherit;border:1px solid var(--border-bright);border-radius:6px;font:inherit;">
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
 </div>
+
+<!-- Interactive selection runtime — REQUIRED in every generated page.
+     See ../references/interactive-selection.md for authoring rules. -->
+<script src="ve-runtime.js"></script>
 
 </body>
 </html>

@@ -79,7 +79,11 @@ Verify each claim against the code and the plan. If something cannot be verified
 
 **Optional illustrations** — if `surf` CLI is available (`which surf`), consider generating a conceptual illustration of the planned system via `surf gemini --generate-image` when it would help the reader visualize the change. Embed as base64 data URI. See css-patterns.md "Generated Images" for container styles. Skip if surf isn't available or the plan is purely structural.
 
-Include responsive section navigation. Use a current-vs-planned visual language throughout: blue/neutral for current state, green/purple for planned additions, amber for areas of concern, red for gaps or risks. Write to `~/.agent/diagrams/` and open in browser.
+Include responsive section navigation. Use a current-vs-planned visual language throughout: blue/neutral for current state, green/purple for planned additions, amber for areas of concern, red for gaps or risks.
+
+**Interactive selection:** every requirement row, risk callout, file entry, current-state Mermaid node, and planned-state Mermaid node must carry `data-ve-id` / `data-ve-type` / `data-ve-label`. Add `click X call veSelectMermaid(...)` directives plus `securityLevel: 'loose'` to both Mermaid diagrams. Embed `<script src="ve-runtime.js"></script>` at end of body. If the plan offers alternative paths, render the choice as a `data-ve-mode="single"` table-form so the user's pick comes back structured. See `./references/interactive-selection.md`.
+
+Write to `~/.agent/diagrams/`. Open it via the interactive selection runner (`python3 <skill-dir>/scripts/ve-select.py ~/.agent/diagrams/<file>.html`) and respond to the user's selection per the SKILL.md follow-up template.
 
 Ultrathink.
 

@@ -54,7 +54,11 @@ Verify each claim against the code. If something cannot be verified, mark it as 
    - Flag each with a severity and a concrete suggestion (e.g., "add a doc comment to `buildCoordinationInstructions` explaining the 4 coordination levels — this function is called from 3 places and the behavior is non-obvious")
 8. **Next steps** — inferred from recent activity, open TODOs, project trajectory. Not prescriptive — just "here's where the momentum was pointing when you left." Include any explicit next-step notes from progress docs or plan files.
 
-Include responsive section navigation. Use a warm, approachable visual language: muted blues and greens for architecture, amber callouts for cognitive debt hotspots, green/blue/amber/red for state-of-things status. Overflow prevention on any side-by-side or grid-based sections: apply `min-width: 0` on all grid/flex children and `overflow-wrap: break-word`. Never use `display: flex` on `<li>` for marker characters — use absolute positioning instead (see css-patterns.md Overflow Protection). Write to `~/.agent/diagrams/` and open in browser.
+Include responsive section navigation. Use a warm, approachable visual language: muted blues and greens for architecture, amber callouts for cognitive debt hotspots, green/blue/amber/red for state-of-things status. Overflow prevention on any side-by-side or grid-based sections: apply `min-width: 0` on all grid/flex children and `overflow-wrap: break-word`. Never use `display: flex` on `<li>` for marker characters — use absolute positioning instead (see css-patterns.md Overflow Protection).
+
+**Interactive selection:** every architecture-Mermaid node, in-progress card, cognitive-debt hotspot, and next-step entry must carry `data-ve-id` / `data-ve-type` / `data-ve-label`. Add `click X call veSelectMermaid(...)` directives plus `securityLevel: 'loose'` to the Mermaid diagram. Embed `<script src="ve-runtime.js"></script>` at end of body. The most useful clicks for a recap page are usually a hotspot ("walk me through this") or a next-step entry ("start working on this"). See `./references/interactive-selection.md`.
+
+Write to `~/.agent/diagrams/`. Open it via the interactive selection runner (`python3 <skill-dir>/scripts/ve-select.py ~/.agent/diagrams/<file>.html`) and respond to the user's selection per the SKILL.md follow-up template.
 
 Ultrathink.
 

@@ -61,7 +61,11 @@ Verify each claim against the code. If something cannot be verified, mark it as 
 
 **Optional illustrations** — if `surf` CLI is available (`which surf`), consider generating a hero banner or conceptual illustration via `surf gemini --generate-image` when it would enhance the page. Embed as base64 data URI. See css-patterns.md "Generated Images" for container styles. Skip if surf isn't available or the diff is purely structural.
 
-Include responsive section navigation. Use diff-style visual language throughout: red for removed/before, green for added/after, yellow for modified, blue for neutral context. Write to `~/.agent/diagrams/` and open in browser.
+Include responsive section navigation. Use diff-style visual language throughout: red for removed/before, green for added/after, yellow for modified, blue for neutral context.
+
+**Interactive selection:** every changed-file card, section/risk callout, and Mermaid node in the architecture diagram must carry `data-ve-id` / `data-ve-type` / `data-ve-label`. Add `click X call veSelectMermaid(...)` directives plus `securityLevel: 'loose'` to the Mermaid diagram. Embed `<script src="ve-runtime.js"></script>` at end of body. See `./references/interactive-selection.md`.
+
+Write to `~/.agent/diagrams/`. Open it via the interactive selection runner (`python3 <skill-dir>/scripts/ve-select.py ~/.agent/diagrams/<file>.html`) and respond to whatever the user clicks per the SKILL.md follow-up template — common follow-ups for diff review are "explain this change", "revert this file", or "expand this risk into a TODO".
 
 Ultrathink.
 

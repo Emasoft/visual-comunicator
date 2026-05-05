@@ -66,3 +66,4 @@ The script also outputs JSON for programmatic use:
 - Deployments are **public** — anyone with the URL can view
 - Preview deployments have a configurable retention period (default: 30 days)
 - Each share creates a new deployment with a unique URL
+- **Interactive selection on shared pages:** the click-to-close mechanism is meant for the local agent loop; on a shared Vercel URL there is no `/__ve-select` endpoint, so the runtime auto-detects this and falls back to the "Copy JSON, paste to your agent" overlay. For shared pages, prefer **inlining** the runtime instead of referencing `ve-runtime.js` as an external file — the runtime is small and inlining keeps the deployment a single self-contained `index.html`. See `./references/interactive-selection.md` "Inlining the runtime".

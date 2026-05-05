@@ -446,12 +446,15 @@
 <div class="diagram">
 
   <!-- Source pills row — hero depth for the entry point -->
-  <div class="section section--hero" style="--i:0">
+  <div class="section section--hero" style="--i:0"
+       data-ve-id="section-input-sources"
+       data-ve-type="section"
+       data-ve-label="Input Sources section">
     <div class="section-label"><span class="dot" style="background:var(--text-dim)"></span> Input Sources</div>
     <div class="sources">
-      <div class="source"><span>💬</span> Slack</div>
-      <div class="source"><span>🐙</span> GitHub</div>
-      <div class="source"><span>📧</span> Email</div>
+      <div class="source" data-ve-id="source-slack" data-ve-type="card" data-ve-label="Slack source"><span>💬</span> Slack</div>
+      <div class="source" data-ve-id="source-github" data-ve-type="card" data-ve-label="GitHub source"><span>🐙</span> GitHub</div>
+      <div class="source" data-ve-id="source-email" data-ve-type="card" data-ve-label="Email source"><span>📧</span> Email</div>
     </div>
   </div>
 
@@ -462,14 +465,23 @@
   </div>
 
   <!-- Gateway section with inner grid -->
-  <div class="section section--accent" style="--i:2">
+  <div class="section section--accent" style="--i:2"
+       data-ve-id="section-gateway"
+       data-ve-type="section"
+       data-ve-label="Gateway Layer section">
     <div class="section-label"><span class="dot"></span> Gateway Layer</div>
     <div class="inner-grid">
-      <div class="inner-card">
+      <div class="inner-card"
+           data-ve-id="card-router"
+           data-ve-type="card"
+           data-ve-label="Router">
         <div class="title">Router</div>
         <div class="desc">Routes messages to agents via <code>resolveRoute()</code></div>
       </div>
-      <div class="inner-card">
+      <div class="inner-card"
+           data-ve-id="card-http-server"
+           data-ve-type="card"
+           data-ve-label="HTTP Server">
         <div class="title">HTTP Server</div>
         <div class="desc">Plugin routes + handlers for webhooks and API</div>
       </div>
@@ -482,7 +494,10 @@
   </div>
 
   <!-- Pipeline section -->
-  <div class="section section--green" style="--i:4">
+  <div class="section section--green" style="--i:4"
+       data-ve-id="section-pipeline"
+       data-ve-type="section"
+       data-ve-label="Processing Pipeline section">
     <div class="section-label"><span class="dot"></span> Processing Pipeline</div>
     <div class="legend" style="margin-bottom:14px">
       <div class="legend-item"><div class="legend-swatch" style="background:var(--teal-dim);border:1px solid var(--teal)"></div>no LLM</div>
@@ -491,38 +506,38 @@
       <div class="legend-item"><div class="legend-swatch" style="background:var(--green-dim);border:1px solid var(--green)"></div>DB write</div>
     </div>
     <div class="pipeline">
-      <div class="pipeline-step pipeline-step--teal">
+      <div class="pipeline-step pipeline-step--teal" data-ve-id="step-prefilter" data-ve-type="card" data-ve-label="Step 0: Pre-filter">
         <div class="step-num">STEP 0</div>
         <div class="step-name">Pre-filter</div>
         <div class="step-detail">Allowlist, bots,<br>dedup check</div>
       </div>
       <div class="pipeline-arrow">→</div>
-      <div class="pipeline-step pipeline-step--sage">
+      <div class="pipeline-step pipeline-step--sage" data-ve-id="step-relevance" data-ve-type="card" data-ve-label="Step 1: Relevance">
         <div class="step-num">STEP 1</div>
         <div class="step-name">Relevance</div>
         <div class="step-detail">Cheap LLM<br>boolean check</div>
       </div>
       <div class="pipeline-arrow">→</div>
-      <div class="pipeline-step pipeline-step--sage">
+      <div class="pipeline-step pipeline-step--sage" data-ve-id="step-classify" data-ve-type="card" data-ve-label="Step 2: Classify">
         <div class="step-num">STEP 2</div>
         <div class="step-name">Classify</div>
         <div class="step-detail">JSON schema<br>validated output</div>
       </div>
       <div class="pipeline-arrow">→</div>
       <div class="pipeline-parallel">
-        <div class="pipeline-step pipeline-step--orange">
+        <div class="pipeline-step pipeline-step--orange" data-ve-id="step-embed" data-ve-type="card" data-ve-label="Step 3: Embed">
           <div class="step-num">STEP 3</div>
           <div class="step-name">Embed</div>
           <div class="step-detail">Vector embedding</div>
         </div>
-        <div class="pipeline-step pipeline-step--teal">
+        <div class="pipeline-step pipeline-step--teal" data-ve-id="step-enrich" data-ve-type="card" data-ve-label="Step 5: Enrich">
           <div class="step-num">STEP 5</div>
           <div class="step-name">Enrich</div>
           <div class="step-detail">User resolution</div>
         </div>
       </div>
       <div class="pipeline-arrow">→</div>
-      <div class="pipeline-step pipeline-step--green">
+      <div class="pipeline-step pipeline-step--green" data-ve-id="step-cluster" data-ve-type="card" data-ve-label="Step 4: Cluster">
         <div class="step-num">STEP 4</div>
         <div class="step-name">Cluster</div>
         <div class="step-detail">Cosine similarity<br>+ INSERT</div>
@@ -536,14 +551,17 @@
   </div>
 
   <!-- Database section -->
-  <div class="section section--orange" style="--i:6">
+  <div class="section section--orange" style="--i:6"
+       data-ve-id="section-database"
+       data-ve-type="section"
+       data-ve-label="Database section">
     <div class="section-label"><span class="dot"></span> Database</div>
     <div class="inner-grid">
-      <div class="inner-card">
+      <div class="inner-card" data-ve-id="card-feedback-items" data-ve-type="card" data-ve-label="feedback_items table">
         <div class="title">feedback_items</div>
         <div class="desc">Classification, embedding, cluster assignment, source dedup</div>
       </div>
-      <div class="inner-card">
+      <div class="inner-card" data-ve-id="card-clusters" data-ve-type="card" data-ve-label="clusters table">
         <div class="title">clusters</div>
         <div class="desc">Centroid vectors, trends, ticket links, severity rollup</div>
       </div>
@@ -557,7 +575,10 @@
 
   <!-- Three column output -->
   <div class="three-col">
-    <div class="section section--sage" style="--i:8">
+    <div class="section section--sage" style="--i:8"
+         data-ve-id="section-agent-tools"
+         data-ve-type="section"
+         data-ve-label="Agent Tools section">
       <div class="section-label"><span class="dot"></span> Agent Tools</div>
       <ul class="node-list">
         <li><code>search</code> semantic vector search</li>
@@ -565,7 +586,10 @@
         <li><code>stats</code> aggregate metrics</li>
       </ul>
     </div>
-    <div class="section section--plum" style="--i:9">
+    <div class="section section--plum" style="--i:9"
+         data-ve-id="section-actions"
+         data-ve-type="section"
+         data-ve-label="Actions section">
       <div class="section-label"><span class="dot"></span> Actions</div>
       <ul class="node-list">
         <li>Create tickets from clusters</li>
@@ -573,7 +597,10 @@
         <li>Generate release notes</li>
       </ul>
     </div>
-    <div class="section section--teal" style="--i:10">
+    <div class="section section--teal" style="--i:10"
+         data-ve-id="section-dashboard"
+         data-ve-type="section"
+         data-ve-label="Dashboard section">
       <div class="section-label"><span class="dot"></span> Dashboard</div>
       <ul class="node-list">
         <li>Metrics overview</li>
@@ -584,13 +611,20 @@
   </div>
 
   <!-- Callout — recessed depth for secondary info -->
-  <div class="callout section section--recessed" style="--i:11">
+  <div class="callout section section--recessed" style="--i:11"
+       data-ve-id="callout-multi-tenant"
+       data-ve-type="callout"
+       data-ve-label="Multi-tenant callout">
     <strong>Multi-tenant</strong> &mdash; Each agent gets an isolated database at
     <code>{agentDir}/intelligence/feedback.db</code> with per-agent config overlay
     and credential isolation.
   </div>
 
 </div>
+
+<!-- Interactive selection runtime — REQUIRED in every generated page.
+     See ../references/interactive-selection.md for authoring rules. -->
+<script src="ve-runtime.js"></script>
 
 </body>
 </html>

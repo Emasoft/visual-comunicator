@@ -340,6 +340,23 @@
         L --> N[Deploy to Production]
         N --> O[Health Check]
         O --> P[Done]
+
+        click A call veSelectMermaid("A","Push to main")
+        click B call veSelectMermaid("B","Branch decision")
+        click C call veSelectMermaid("C","Run tests (main)")
+        click D call veSelectMermaid("D","Lint + Type Check")
+        click E call veSelectMermaid("E","Unit Tests")
+        click F call veSelectMermaid("F","Integration Tests")
+        click G call veSelectMermaid("G","Build Docker Image")
+        click H call veSelectMermaid("H","Deploy to Staging")
+        click I call veSelectMermaid("I","Run tests (feature)")
+        click J call veSelectMermaid("J","Preview Deploy")
+        click K call veSelectMermaid("K","Smoke tests gate")
+        click L call veSelectMermaid("L","Manual Approval")
+        click M call veSelectMermaid("M","Alert + Rollback")
+        click N call veSelectMermaid("N","Deploy to Production")
+        click O call veSelectMermaid("O","Health Check")
+        click P call veSelectMermaid("P","Done")
     </script>
   </section>
 
@@ -389,6 +406,10 @@
   mermaid.registerLayoutLoaders(elkLayouts);
   mermaid.initialize({
     startOnLoad: false,
+    // 'loose' is required so `click X call veSelectMermaid(...)` directives
+    // can invoke our window-scoped selection helper. The helper is defined
+    // by ve-runtime.js and routes to the local /__ve-select endpoint.
+    securityLevel: 'loose',
     theme: 'base',
     look: 'classic',
     layout: 'elk',
@@ -719,6 +740,10 @@
 
   document.querySelectorAll('.diagram-shell').forEach(initDiagram);
 </script>
+
+<!-- Interactive selection runtime — REQUIRED in every generated page.
+     See ../references/interactive-selection.md for authoring rules. -->
+<script src="ve-runtime.js"></script>
 
 </body>
 </html>

@@ -15,4 +15,6 @@ Follow the visual-explainer skill workflow. Read the reference template at `./te
 
 **Compositional variety:** Consecutive slides must vary their spatial approach. Alternate between centered, left-heavy, right-heavy, split, edge-aligned, and full-bleed. Three centered slides in a row means push one off-axis.
 
-Write to `~/.agent/diagrams/` and open the result in the browser.
+**Interactive selection:** every `<section class="slide">` carries `data-ve-id="slide-N-<kind>"` / `data-ve-type="slide"` / `data-ve-label`; inner cards, KPI numbers, table rows, and Mermaid nodes also carry their own `data-ve-id` (the runtime resolves the innermost ancestor). Embed `<script src="ve-runtime.js"></script>` at end of body and add `mermaid.initialize({securityLevel:'loose', …})`. See `./references/interactive-selection.md`.
+
+Write to `~/.agent/diagrams/`. Open it via the interactive selection runner (`python3 <skill-dir>/scripts/ve-select.py ~/.agent/diagrams/<file>.html`) and respond to whatever the user clicks per the SKILL.md follow-up template.

@@ -5,15 +5,15 @@
   },
   "metadata": {
     "description": "Plugin distribution for visual-explainer",
-    "version": "0.7.1",
+    "version": "0.8.0",
     "pluginRoot": "./plugins"
   },
   "plugins": [
     {
       "name": "visual-explainer",
       "source": "./plugins/visual-explainer",
-      "description": "Generate beautiful HTML pages for diagrams, diff reviews, plan reviews, slides, and data tables",
-      "version": "0.7.1",
+      "description": "Generate beautiful HTML pages for diagrams, diff reviews, plan reviews, slides, and data tables — every page is interactive, click any element to send the selection back to the agent",
+      "version": "0.8.0",
       "author": {
         "name": "nicobailon"
       },
