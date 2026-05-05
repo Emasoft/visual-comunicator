@@ -160,7 +160,7 @@ Total: ~6 days at one feature per session.
 ## 10. Phase 0 — what's on disk
 
 `plugins/visual-explainer/vendor/regex-vis/`
-- `LICENSE.upstream` — preserved verbatim per MIT
+- `LICENSE` — upstream MIT preserved verbatim, referenced from project-root `THIRD_PARTY_NOTICES.md`
 - `README.md` — what's vendored vs. what changed, build instructions, phase status
 - `README.upstream.md` — copy of upstream's README
 - `package.json` — minimal deps: React 18, jotai, immer, nanoid, Radix primitives, clsx, tailwind-merge, react-use, usehooks-ts. Stripped: i18next, sentry, vercel/analytics, react-router-dom, sonner, classnames duplicates.

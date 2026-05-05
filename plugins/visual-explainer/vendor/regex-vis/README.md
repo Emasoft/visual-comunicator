@@ -1,6 +1,6 @@
 # `ve-regex` — Vendored regex visualizer
 
-This directory holds a **vendored copy** of [Bowen7/regex-vis](https://github.com/Bowen7/regex-vis) (MIT, see `LICENSE.upstream`), trimmed and re-skinned for the `visual-explainer` plugin.
+This directory holds a **vendored copy** of [Bowen7/regex-vis](https://github.com/Bowen7/regex-vis) (MIT, see `LICENSE`), trimmed and re-skinned for the `visual-explainer` plugin. The full third-party notice for this vendored library is recorded in `THIRD_PARTY_NOTICES.md` at the project root.
 
 The goal: drop-in regex graph + edit-panel that the plugin lazy-loads on any page containing `<div class="ve-regex" data-regex="...">`. Same render pattern as KaTeX / viz.js / TikZJax / Mermaid in `ve-runtime.js`.
 
@@ -18,7 +18,7 @@ The goal: drop-in regex graph + edit-panel that the plugin lazy-loads on any pag
 | `src/constants/` | upstream `src/constants/` | trimmed — URL params and storage keys we don't need are removed. |
 | `src/ve-regex-entry.tsx` | **NEW** | minimal Vanilla-friendly mount API (`window.VeRegex.render(el, options)`). |
 | `package.json`, `vite.config.ts` | **NEW** | builds a single UMD bundle (`dist/ve-regex.umd.js`) + standalone CSS. |
-| `LICENSE.upstream` | upstream `LICENSE` | preserved per MIT requirements. |
+| `LICENSE` | upstream `LICENSE` | preserved verbatim per MIT requirements (also referenced from project-root `THIRD_PARTY_NOTICES.md`). |
 
 What's intentionally NOT vendored from upstream: `App.tsx`, `routes.tsx`, `index.tsx`, the `home/` module, Sentry/Vercel analytics wiring, `i18n.ts` + `react-i18next` integration. We use English only and don't need URL routing.
 
