@@ -28,3 +28,9 @@ __pycache__/
 # tldr CLI runtime state + per-project ignore file
 /.tldr/
 /.tldrignore
+
+# Vendored regex-vis build artefacts — node_modules is huge, dist is
+# regenerable via `npm run build` in the vendor dir. Source lives under
+# plugins/visual-explainer/vendor/regex-vis/src/ and IS committed.
+plugins/visual-explainer/vendor/regex-vis/node_modules/
+plugins/visual-explainer/vendor/regex-vis/dist/

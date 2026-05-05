@@ -3,7 +3,7 @@
 **TRDD ID:** `bdf0cc34-539e-4c9d-9773-2375184934c4`
 **Filename:** `design/tasks/TRDD-bdf0cc34-539e-4c9d-9773-2375184934c4-regex-vis-component.md`
 **Tracked in:** this repo (design/tasks/ is git-tracked)
-**Status:** Not started — awaiting design approval
+**Status:** Phase 0 complete (vendored source + skeleton). Phase 1+ pending.
 **Created:** 2026-05-05
 **Plugin:** visual-explainer
 
@@ -149,8 +149,38 @@ Total: ~6 days at one feature per session.
 
 ## 9. Decision log
 
-(To be appended as design questions are answered.)
+**2026-05-05 — Path locked**: User said *"ignore upstream, recycle or implement independently. Of course reuse what already works, just change the style and adapt it to our visual-comunicator plugin system and modules. I leave to you the choice of the tech stack to use, but try to reproduce the graph exactly and the panel editing functionalities exactly. They were tested for a long time, we don't want to waste time retest everything. just change the style/palette/fonts."* Locked Option B (vendor + UMD bundle, with aggressive trimming) — preserves the upstream React + Jotai + parser/atom/graph/editor logic byte-for-byte (so we don't re-test) and only changes styling. Open questions in §6 are deferred — sensible defaults applied:
+- (1) Selection model = edit-panel primary (a)
+- (2) Bundle ~150 KB lazy-loaded — acceptable
+- (3) Fonts: Crimson Pro outside, JetBrains Mono inside the SVG and panel
+- (4) Test panel: keep (one-line config switch)
+- (5) i18n: hard-code English (strip i18next)
+- (6) Maintenance: pin the cloned commit, manual re-vendor when needed
+
+## 10. Phase 0 — what's on disk
+
+`plugins/visual-explainer/vendor/regex-vis/`
+- `LICENSE.upstream` — preserved verbatim per MIT
+- `README.md` — what's vendored vs. what changed, build instructions, phase status
+- `README.upstream.md` — copy of upstream's README
+- `package.json` — minimal deps: React 18, jotai, immer, nanoid, Radix primitives, clsx, tailwind-merge, react-use, usehooks-ts. Stripped: i18next, sentry, vercel/analytics, react-router-dom, sonner, classnames duplicates.
+- `vite.config.ts` — UMD build config, output `dist/ve-regex.umd.js` + `dist/ve-regex.css`, library name `VeRegex`. React + ReactDOM bundled in (not externalized).
+- `src/parser/` — verbatim from upstream `src/parser/`. Tests stripped.
+- `src/atom/` — verbatim from upstream `src/atom/`. Tests stripped.
+- `src/graph/` — verbatim from upstream `src/modules/graph/`.
+- `src/editor/` — verbatim from upstream `src/modules/editor/`.
+- `src/playground/` — reference only, minimal mount example.
+- `src/components/` — upstream UI primitives. **Phase 2 will trim Radix-only ones.**
+- `src/utils/` — verbatim from upstream `src/utils/`.
+- `src/constants/` — trimmed of URL/storage params we don't need.
+- `src/ve-regex-entry.tsx` — **NEW**. Minimal vanilla-friendly mount API: `window.VeRegex.render(el, {regex, defaultTab, onChange})`. Returns `{unmount}`. One Jotai store per mount so multiple `.ve-regex` blocks on the same page don't share state.
+
+Total: 112 source files (excluding stripped tests), ~5,300 production LOC.
+
+## 11. Cloned upstream commit
+
+`libs_dev/regex-vis-upstream/` (gitignored) holds the upstream clone done on 2026-05-05. Capture the commit hash here when re-vendoring; the current vendored snapshot is `main` HEAD as of 2026-05-05.
 
 ---
 
-**Awaiting:** user approval of (a) Option B as the implementation path and (b) the open-question recommendations in §6, then phase 1 vendoring begins.
+**Next session:** Phase 1 — `npm install && npm run build` in the vendor dir, smoke-test that the produced UMD bundle renders a graph from a regex string in a static HTML test page. Once that's green, Phase 2 begins (theme adapter).
