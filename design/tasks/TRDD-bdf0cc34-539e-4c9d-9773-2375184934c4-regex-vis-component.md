@@ -105,8 +105,8 @@ Port `src/parser/` (no React, just text → AST) to vanilla JS. Reuse the AST �
 
 Steps:
 
-1. **Vendor the source** — copy `src/parser/`, `src/modules/graph/`, `src/modules/editor/` (with their dependencies) into `plugins/visual-explainer/vendor/regex-vis/`. Preserve the MIT LICENSE.
-2. **Theme adapter** — create `plugins/visual-explainer/vendor/regex-vis/theme.css` that overrides Tailwind utility classes with our CSS variables. Replace fonts (`font-sans` → `'Crimson Pro'`, `font-mono` → `'JetBrains Mono'`). Replace colours (`bg-blue-500` → `var(--accent)`, hover ring → `var(--ve-accent)`, etc.).
+1. **Vendor the source** — copy `src/parser/`, `src/modules/graph/`, `src/modules/editor/` (with their dependencies) into `vendor/regex-vis/`. Preserve the MIT LICENSE.
+2. **Theme adapter** — create `vendor/regex-vis/theme.css` that overrides Tailwind utility classes with our CSS variables. Replace fonts (`font-sans` → `'Crimson Pro'`, `font-mono` → `'JetBrains Mono'`). Replace colours (`bg-blue-500` → `var(--accent)`, hover ring → `var(--ve-accent)`, etc.).
 3. **Bundle config** — set up Vite in the vendored directory to produce `dist/ve-regex.umd.js` and `dist/ve-regex.css` as standalone bundles. Externalize React only if we can guarantee a CDN React is loaded; otherwise inline it.
 4. **Runtime hook** — extend `ve-runtime.js`:
    - Detect `.ve-regex[data-regex]` elements at init.
@@ -157,9 +157,16 @@ Total: ~6 days at one feature per session.
 - (5) i18n: hard-code English (strip i18next)
 - (6) Maintenance: pin the cloned commit, manual re-vendor when needed
 
+**2026-05-06 — Layout cleanup**: User pointed out that my Phase 0 commit had put the build pipeline (`package.json`, `vite.config.ts`) **inside the plugin tree** at `plugins/visual-explainer/vendor/regex-vis/`, which would confuse end users (the plugin should ship binaries, not a buildable npm project). Cleaned up:
+- Vendored source moved to **top-level `vendor/regex-vis/`** (tracked but explicitly NOT inside any plugin).
+- Plugin tree no longer has a `vendor/` subdirectory at all.
+- The eventual built artefact (`dist/ve-regex.umd.js` + `dist/ve-regex.css`) gets copied into `plugins/visual-explainer/scripts/` after each build — those are the only files that ship to end users.
+- A sibling `ve-regex.LICENSE` accompanies the bundle so MIT attribution travels with the compiled form.
+- `THIRD_PARTY_NOTICES.md` at the repo root + canonical `LICENSE` filename in the vendor dir, per the MIT-attribution layout convention.
+
 ## 10. Phase 0 — what's on disk
 
-`plugins/visual-explainer/vendor/regex-vis/`
+`vendor/regex-vis/`
 - `LICENSE` — upstream MIT preserved verbatim, referenced from project-root `THIRD_PARTY_NOTICES.md`
 - `README.md` — what's vendored vs. what changed, build instructions, phase status
 - `README.upstream.md` — copy of upstream's README

@@ -1,6 +1,8 @@
-# `ve-regex` — Vendored regex visualizer
+# `ve-regex` — Vendored regex visualizer (build source)
 
-This directory holds a **vendored copy** of [Bowen7/regex-vis](https://github.com/Bowen7/regex-vis) (MIT, see `LICENSE`), trimmed and re-skinned for the `visual-explainer` plugin. The full third-party notice for this vendored library is recorded in `THIRD_PARTY_NOTICES.md` at the project root.
+This directory holds the **build-time source** for the `ve-regex` component shipped by the `visual-explainer` plugin. It is a vendored copy of [Bowen7/regex-vis](https://github.com/Bowen7/regex-vis) (MIT, see `LICENSE`), trimmed and re-skinned. The full third-party notice for this vendored library is recorded in `THIRD_PARTY_NOTICES.md` at the project root.
+
+**This directory is repo-contributor build material; nothing here ships to plugin end users.** The `npm run build` step below produces a single UMD bundle that gets copied into `plugins/visual-explainer/scripts/ve-regex.umd.js` — that is the only file the plugin distributes. End users never see this `vendor/` directory.
 
 The goal: drop-in regex graph + edit-panel that the plugin lazy-loads on any page containing `<div class="ve-regex" data-regex="...">`. Same render pattern as KaTeX / viz.js / TikZJax / Mermaid in `ve-runtime.js`.
 
@@ -25,15 +27,20 @@ What's intentionally NOT vendored from upstream: `App.tsx`, `routes.tsx`, `index
 ## Build (next session)
 
 ```bash
-cd plugins/visual-explainer/vendor/regex-vis
-npm install
-npm run build
-# -> dist/ve-regex.umd.js  + dist/ve-regex.css
+cd vendor/regex-vis
+npm install                                                  # one-time
+npm run build                                                # writes dist/
+cp dist/ve-regex.umd.js  ../../plugins/visual-explainer/scripts/
+cp dist/ve-regex.css     ../../plugins/visual-explainer/scripts/
+cp LICENSE               ../../plugins/visual-explainer/scripts/ve-regex.LICENSE
+git add plugins/visual-explainer/scripts/ve-regex.umd.js \
+        plugins/visual-explainer/scripts/ve-regex.css \
+        plugins/visual-explainer/scripts/ve-regex.LICENSE
 ```
 
-The output goes into `dist/`. The plugin runtime lazy-loads it at first sight of a `.ve-regex[data-regex]` element.
+`vendor/regex-vis/dist/` and `vendor/regex-vis/node_modules/` are gitignored — they're build by-products. Only the three files copied into `plugins/visual-explainer/scripts/` are committed, so the plugin remains drop-in for end users (no `npm install` required at install time).
 
-`dist/` is gitignored by default (rebuildable from source) but the **finished bundle files** (`dist/ve-regex.umd.js` + `dist/ve-regex.css`) are explicitly force-added with `git add -f` after each meaningful build, so the plugin remains drop-in for end users (no `npm install` required at install time). After a vendored-source change, re-run `npm run build` and `git add -f dist/ve-regex.umd.js dist/ve-regex.css` to update the committed bundle.
+The plugin runtime (`ve-runtime.js`) lazy-loads `scripts/ve-regex.umd.js` + `scripts/ve-regex.css` from same origin at first sight of a `.ve-regex[data-regex]` element on the page.
 
 ## Phase status (TRDD-bdf0)
 

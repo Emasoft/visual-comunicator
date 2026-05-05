@@ -29,8 +29,10 @@ __pycache__/
 /.tldr/
 /.tldrignore
 
-# Vendored regex-vis build artefacts — node_modules is huge, dist is
-# regenerable via `npm run build` in the vendor dir. Source lives under
-# plugins/visual-explainer/vendor/regex-vis/src/ and IS committed.
-plugins/visual-explainer/vendor/regex-vis/node_modules/
-plugins/visual-explainer/vendor/regex-vis/dist/
+# Vendored library build artefacts — node_modules is huge, dist is
+# regenerable via `npm run build` in the vendor dir. Vendored source
+# lives under top-level vendor/<lib>/src/ (TRACKED, but not part of
+# any plugin distribution — only the built artefact is copied into a
+# plugin's scripts/ folder).
+vendor/*/node_modules/
+vendor/*/dist/

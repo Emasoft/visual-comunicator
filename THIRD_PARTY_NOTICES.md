@@ -13,11 +13,12 @@ When the project is redistributed in source form, the licence files referenced b
 - **Source repository:** <https://github.com/Bowen7/regex-vis>
 - **Upstream licence:** MIT
 - **Upstream copyright:** Copyright © 2021 Bowen
-- **Vendored under:** `plugins/visual-explainer/vendor/regex-vis/`
-- **Licence text (verbatim):** [`plugins/visual-explainer/vendor/regex-vis/LICENSE`](./plugins/visual-explainer/vendor/regex-vis/LICENSE)
+- **Vendored under:** `vendor/regex-vis/` (top-level — NOT inside any plugin tree, so it never ships to plugin end users)
+- **Licence text (verbatim):** [`vendor/regex-vis/LICENSE`](./vendor/regex-vis/LICENSE)
 - **What was copied:** the `parser/`, `atom/`, `graph/`, `editor/`, `utils/`, `components/`, `constants/`, and `playground/` directories of the upstream `src/` tree, plus the upstream `LICENSE` and `README.md`. Tests were stripped from the vendored copy. The runtime entry file `src/ve-regex-entry.tsx` is **NEW** (not from upstream) and licensed under the project's own MIT licence.
-- **What was modified:** none of the upstream source has been edited as of the current vendoring pass. Any future modifications will be tracked in `plugins/visual-explainer/vendor/regex-vis/README.md`.
-- **Pinned upstream commit:** `main` HEAD as of the vendoring date recorded in `plugins/visual-explainer/vendor/regex-vis/README.md`.
+- **What was modified:** none of the upstream source has been edited as of the current vendoring pass. Any future modifications will be tracked in `vendor/regex-vis/README.md`.
+- **What ships to plugin end users:** **only** the built artefact `plugins/visual-explainer/scripts/ve-regex.umd.js` plus a sibling `ve-regex.LICENSE` (or an embedded header comment). The vendored source under `vendor/` is repo-contributor build material; it never reaches the published plugin.
+- **Pinned upstream commit:** `main` HEAD as of the vendoring date recorded in `vendor/regex-vis/README.md`.
 
 ---
 
