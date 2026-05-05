@@ -84,8 +84,10 @@ export function render(container: HTMLElement, options: RenderOptions): { unmoun
   }
 }
 
-// Default export so `import VeRegex from './ve-regex.umd.js'` also
-// works. Vite's UMD output exposes the entire export object as
-// `window.VeRegex`, so `window.VeRegex.render(...)` is the canonical
-// call site from ve-runtime.js.
-export default { render }
+// Single named export only. Vite's UMD output exposes the export
+// object as `window.VeRegex`, so the canonical call site from
+// ve-runtime.js is `window.VeRegex.render(el, options)`. We
+// intentionally omit a `default` export — when both named and default
+// exports coexist in a UMD lib build, Vite emits the namespace such
+// that callers must write `VeRegex.default.render(...)`, which would
+// silently break ve-runtime.js. Named-only keeps the API flat.

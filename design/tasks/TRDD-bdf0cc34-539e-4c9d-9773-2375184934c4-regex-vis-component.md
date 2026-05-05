@@ -3,7 +3,7 @@
 **TRDD ID:** `bdf0cc34-539e-4c9d-9773-2375184934c4`
 **Filename:** `design/tasks/TRDD-bdf0cc34-539e-4c9d-9773-2375184934c4-regex-vis-component.md`
 **Tracked in:** this repo (design/tasks/ is git-tracked)
-**Status:** Phase 0 complete (vendored source + skeleton). Phase 1+ pending.
+**Status:** Phases 0 + 1 complete. Bundle builds and renders. Phase 2 (theme adapter) next.
 **Created:** 2026-05-05
 **Plugin:** visual-explainer
 
@@ -191,3 +191,33 @@ Total: 112 source files (excluding stripped tests), ~5,300 production LOC.
 ---
 
 **Next session:** Phase 1 — `npm install && npm run build` in the vendor dir, smoke-test that the produced UMD bundle renders a graph from a regex string in a static HTML test page. Once that's green, Phase 2 begins (theme adapter).
+
+## 12. Phase 1 — what was needed to actually build
+
+Phase 1 turned out to require five small surgical adjustments beyond the initial Phase 0 skeleton. Recording them here so the next maintainer doesn't re-debug:
+
+1. **Add the missing direct deps** — Phase 0's `package.json` had only the deps the entry file `ve-regex-entry.tsx` literally imported. The vendored upstream source pulls in additional Radix primitives (`@radix-ui/react-dropdown-menu`, `@radix-ui/react-toast`, `@radix-ui/react-icons`) plus `@phosphor-icons/react`, `react-router-dom`, `react-i18next`, and `i18next`. They're in the lockfile now.
+2. **Inline the Tailwind-config dep** — `src/constants/index.ts` originally read `theme.fontFamily.mono` from `tailwind.config.ts` to fill `REGEX_FONT_FAMILY`. We bundle without Tailwind, so that path was hard-coded to the JetBrains Mono stack the rest of the plugin uses.
+3. **Provide a stub `src/i18n.ts`** — `src/graph/measure.ts` calls `i18n.t(key)` to resolve translation strings. Since we hard-coded English (decision §6), the stub returns the key as-is for now (Phase 2 swaps in real English strings).
+4. **Add module-aliases for the flattened layout** — Phase 0 vendored `src/modules/{graph,editor,playground}/` as `src/{graph,editor,playground}/` (one level shallower). The upstream files inside still import `@/modules/graph/X`, so `vite.config.ts` resolves those prefixes back to the new paths. The upstream files stay byte-for-byte unchanged.
+5. **`define: process.env.NODE_ENV = "production"` + named-only export** — Vite's `lib` mode does NOT replace `process.env.NODE_ENV` by default (that's reserved for `app` builds), so the bundle threw `process is not defined` the moment React booted. Forcing the substitution to `"production"` strips dev-only code and brings the bundle from 821 KB / 253 KB gz down to 484 KB / **151 KB gz**. The `ve-regex-entry.tsx` default export was also dropped (named-only) — when both coexist, Vite's UMD output exposes the namespace such that callers must write `VeRegex.default.render(...)` and ve-runtime would silently break.
+
+Smoke-test result (`tests_dev/regex-vis-smoke.html`, served from `localhost:8765`, dev-browser headless verification):
+- `window.VeRegex.render` is callable
+- Mounting `^([a-z]+)@([a-z]+)\.com$` produces a complete SVG graph (20 SVG elements, 237 child nodes)
+- Tabs `Legends` / `Edit` / `Test` are rendered
+- All 8 legend categories (Characters / Character classes / Ranges / Choice / Quantifier / Group / Back reference / Assertion) appear
+
+Visual state: the graph topology is correct but the foreignObject children inside SVG nodes render as solid black rectangles because Tailwind utility classes (`rounded-lg`, `font-mono`, `stroke-graph` etc.) have no CSS attached to them. **This is exactly what Phase 2 fixes** — the theme adapter replaces those Tailwind classes with our CSS variables and produces `dist/ve-regex.css`.
+
+Bundle sizes: 484 KB raw / 151 KB gzipped — within the user's "~150 KB acceptable" decision (§6 Q2).
+
+## 13. Phase 1 — files now in the plugin distribution
+
+```
+plugins/visual-explainer/scripts/
+  ve-regex.umd.js     484 KB  ← built artefact (committed)
+  ve-regex.LICENSE      1 KB  ← upstream MIT (committed)
+```
+
+That's the entire user-visible footprint of regex-vis in the plugin. End users `git clone` the plugin and immediately have a working bundle — no `npm install`, no build step.

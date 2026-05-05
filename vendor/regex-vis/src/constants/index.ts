@@ -1,7 +1,15 @@
-import resolveConfig from 'tailwindcss/resolveConfig'
-import tailwindConfig from 'tailwind.config'
-
-const fullTailwindConfig = resolveConfig(tailwindConfig)
+// Upstream pulled this from the Tailwind config's `theme.fontFamily.mono`
+// list. We bundle without Tailwind (the visual-explainer plugin uses CSS
+// custom properties instead), so the value is hard-coded to the same mono
+// stack the rest of the plugin uses for code/regex tokens. Phase 2 will
+// fold this into the theme adapter alongside the other font swaps.
+//
+// Original line was:
+//   import resolveConfig from 'tailwindcss/resolveConfig'
+//   import tailwindConfig from 'tailwind.config'
+//   const fullTailwindConfig = resolveConfig(tailwindConfig)
+//   ...
+//   export const REGEX_FONT_FAMILY = fullTailwindConfig.theme.fontFamily.mono.join(', ')
 
 // graph
 export const GRAPH_TEXT_FONT_SIZE = 16
@@ -44,4 +52,4 @@ export const STORAGE_GRAPH_TIP_VISIBLE = 'graph-tip-visible'
 export const SEARCH_PARAM_REGEX = 'r'
 export const SEARCH_PARAM_TESTS = 't'
 
-export const REGEX_FONT_FAMILY = fullTailwindConfig.theme.fontFamily.mono.join(', ')
+export const REGEX_FONT_FAMILY = '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
