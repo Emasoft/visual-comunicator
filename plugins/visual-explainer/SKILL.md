@@ -138,6 +138,12 @@ Clicks on the `.ve-pnum` paragraph-number marker (the small "1.2.1" badge) still
 }
 ```
 
+**Selection text colour.** The runtime forces every multi-click selection (`.ve-text-sel`, `[data-ve-text-sel-block]`, `[data-ve-math-sel]`) to use `--ve-sel-text` (default `#14110b`, near-black). This guarantees that selected text NEVER inherits the page's own text colour — without the override, an editorial page using gold accent + warm-tone body text in dark mode would render selected text in nearly the same hue as the highlight tint, making the selection unreadable. If your accent is itself a dark tone (e.g. deep navy on dark background) and black-on-tinted-navy still has poor contrast, override it on `:root`:
+
+```css
+:root { --ve-sel-text: #ffffff; } /* white text on a dark accent highlight */
+```
+
 For pages that override the runtime's hover styles (e.g. graph palettes), mirror every `:hover` palette rule to `[data-ve-selected="1"]` via a comma-list selector — see `./references/interactive-selection.md` "Page CSS contract (multi-select)".
 
 ### Required boilerplate in every generated page

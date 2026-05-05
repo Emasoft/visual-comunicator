@@ -277,12 +277,27 @@
       // lines at the same coordinates → user sees a fat double / dashed
       // edge instead of a clean highlight.
       'svg path[data-ve-hit="1"] { stroke: transparent !important; fill: none !important; filter: none !important; }',
-      // Phase 2 — default highlight for multi-click text selections.
-      // Pages can override the colour, padding, etc. via their own
-      // .ve-text-sel rule. The default uses --ve-accent so the highlight
-      // colour matches whatever the page chose for hover/selected.
+      // Phase 2/3 — default highlight for multi-click text selections.
+      //
+      // The text colour is FORCED to a near-black tone (`--ve-sel-text`)
+      // because the highlight background is always a tint of the page's
+      // accent colour. When the accent is gold/amber/orange (a common
+      // editorial choice) and the page text is also a warm tone (e.g.
+      // dark mode using `--gold` for body text shadows), the page text
+      // colour and highlight tint sit close on the colour wheel and
+      // selected text becomes nearly unreadable. Forcing the selected
+      // text to near-black guarantees high contrast on every accent
+      // because the highlight tint, by being mixed with `transparent`,
+      // is always the LIGHTER end of the accent's luminosity range — and
+      // black contrasts well against any light tint regardless of hue.
+      //
+      // Pages that need to override (e.g. a dark-on-dark accent palette
+      // where black would be invisible) can set --ve-sel-text on :root
+      // to any contrasting tone.
+      ':root { --ve-sel-text: #14110b; }',
       '.ve-text-sel {',
       '  background: color-mix(in srgb, var(--ve-accent, #b8861f) 32%, transparent);',
+      '  color: var(--ve-sel-text);',
       '  border-radius: 2px;',
       '  padding: 0 1px;',
       '  cursor: text;',
@@ -292,30 +307,80 @@
       // because it covers a much larger area and darker tones become
       // overpowering. The data-ve-text-sel-block attribute carries the
       // entryId, so multiple block selections can co-exist with
-      // independent IDs.
+      // independent IDs. Same forced text colour as .ve-text-sel.
       '[data-ve-text-sel-block] {',
       '  background: color-mix(in srgb, var(--ve-accent, #b8861f) 16%, transparent);',
+      '  color: var(--ve-sel-text);',
       '  border-radius: 4px;',
       '  outline: 1px solid color-mix(in srgb, var(--ve-accent, #b8861f) 50%, transparent);',
       '  outline-offset: 2px;',
       '}',
+      // Block-level selections recursively repaint descendant elements
+      // so their inherited colours don\'t override --ve-sel-text. Without
+      // this rule, a paragraph painted at depth 4 would have black
+      // outline + accent tint + still-original text colour because the
+      // paragraph\'s child elements (links, code spans, .ve-math nodes)
+      // each set their own `color`.
+      '[data-ve-text-sel-block] *:not([data-ve-pnum]) { color: inherit; }',
+      // Phase 3 — math sub-formula highlight for depths 1-3 inside
+      // .ve-math (atom, group, whole formula). Slightly brighter than the
+      // block highlight (since math atoms are tiny and need a sharper
+      // contrast to read), but still lighter than the prose .ve-text-sel
+      // because the highlight sits on top of KaTeX-rendered glyphs that
+      // can themselves be small. The selector is intentionally generic
+      // (not scoped to .ve-math) so it works even if the page wraps math
+      // in [data-ve-math] without the .ve-math class.
+      '[data-ve-math-sel] {',
+      '  background: color-mix(in srgb, var(--ve-accent, #b8861f) 24%, transparent);',
+      '  color: var(--ve-sel-text);',
+      '  border-radius: 3px;',
+      '  outline: 1px solid color-mix(in srgb, var(--ve-accent, #b8861f) 60%, transparent);',
+      '  outline-offset: 1px;',
+      '}',
+      // KaTeX renders glyphs with explicit `color` on inner spans (italic
+      // variables, operator glyphs, etc.). Force descendant inherit so
+      // the math selection actually wins.
+      '[data-ve-math-sel] * { color: inherit; }',
       // Mermaid nodes (handled separately because their .node class isn\'t
       // wrapped in [data-ve-id] until veSelectMermaid is wired):
       '.mermaid .node { cursor:pointer; }',
       '.mermaid .node:hover > * { filter:brightness(1.15); }',
       '[data-ve-overlay] button { font:inherit; }',
-      // Paragraph-number marker in prose mode. Subtle by default, brighter
-      // on hover so the user discovers it without clutter on the page.
+      // Paragraph-number marker in prose mode. Sized BIGGER than the
+      // body text (1.05em) and bold, because monospace glyphs render
+      // visually shorter than serif at the same point size — without the
+      // size bump the marker sits below the baseline and looks like a
+      // weak afterthought. The opacity stays modest (0.55) so the marker
+      // still recedes when the reader is focused on the prose; hover
+      // brightens it to 0.95 to confirm it\'s clickable.
       '.ve-pnum {',
       '  display:inline-block; vertical-align:baseline;',
-      '  font:500 11px/1 ui-monospace,Menlo,Consolas,monospace;',
-      '  color:currentColor; opacity:0.42;',
-      '  margin-right:0.55em; padding:1px 5px;',
-      '  border:1px solid currentColor; border-radius:4px;',
+      '  font:700 1.05em/1 ui-monospace,Menlo,Consolas,monospace;',
+      '  color:currentColor; opacity:0.55;',
+      '  margin-right:0.6em; padding:2px 7px;',
+      '  border:1.5px solid currentColor; border-radius:5px;',
       '  text-decoration:none; user-select:none;',
       '  transition:opacity 120ms ease;',
       '}',
       '.ve-pnum:hover { opacity:0.95; }',
+      // Depth-based paragraph indentation. The numberProse() function
+      // stamps data-ve-pdepth (1..N) alongside data-ve-pnum; CSS keys
+      // off it to indent each paragraph proportionally to its hierarchy
+      // level. Unit is REM (root-relative) — using `em` would couple the
+      // tab width to the element\'s own font-size, so an h2 at depth 2
+      // would indent more than a p at the same depth. Rem keeps a depth
+      // tab visually identical regardless of the element\'s typography.
+      '[data-ve-prose] [data-ve-pdepth="1"] { margin-left: 1.5rem; }',
+      '[data-ve-prose] [data-ve-pdepth="2"] { margin-left: 3rem; }',
+      '[data-ve-prose] [data-ve-pdepth="3"] { margin-left: 4.5rem; }',
+      '[data-ve-prose] [data-ve-pdepth="4"] { margin-left: 6rem; }',
+      '[data-ve-prose] [data-ve-pdepth="5"] { margin-left: 7.5rem; }',
+      '[data-ve-prose] [data-ve-pdepth="6"] { margin-left: 9rem; }',
+      // The injected hover/selected outline adds an extra 8px padding.
+      // Since we now use margin-left for indent, the inset box-shadow
+      // still fires from the paragraph\'s left edge — exactly what the
+      // user expects (hover ribbon hugs the indented block, not the
+      // viewport edge).
       '[data-ve-prose] [data-ve-id]:hover { outline:none; box-shadow:inset 4px 0 0 currentColor; padding-left:8px; }',
       '[data-ve-prose] [data-ve-id] { transition:padding 120ms ease, box-shadow 120ms ease; padding-left:0; }',
       // Floating "Ask about this snippet" popup that appears over a
@@ -1171,6 +1236,9 @@
         if (!hnum) return;
 
         node.setAttribute('data-ve-pnum', hnum);
+        // data-ve-pdepth = number of segments in the pnum (e.g. "1.2.1" = 3).
+        // Read by the CSS rules above to indent the element by depth.
+        node.setAttribute('data-ve-pdepth', String(hnum.split('.').length));
         if (!node.hasAttribute('data-ve-id')) {
           node.setAttribute('data-ve-id', 've-section-' + hnum);
           node.setAttribute('data-ve-type', 'section');
@@ -1187,6 +1255,7 @@
         orderIndex++;
         var pnum = (numberSection(counters.slice(0, lastHeadingLevel)) || '0') + '.' + paraCounter;
         node.setAttribute('data-ve-pnum', pnum);
+        node.setAttribute('data-ve-pdepth', String(pnum.split('.').length));
         node.setAttribute('data-ve-pnum-order', String(orderIndex));
         if (!node.hasAttribute('data-ve-id')) {
           node.setAttribute('data-ve-id', 've-para-' + pnum);
@@ -2665,6 +2734,98 @@
     return entryId;
   }
 
+  // ─────────────────────────────────────────────────────────────────────
+  // Phase 3 — math sub-formula selection (depths 1-3 inside .ve-math).
+  //
+  // KaTeX renders LaTeX into nested <span> trees with predictable class
+  // names. The smallest visible atoms carry one of: .mord (ordinary
+  // letter/digit), .mbin (binary op), .mrel (relation), .mop (large
+  // operator), .mopen / .mclose (delimiters), .mpunct (punctuation),
+  // .minner (inner). Group containers carry .mfrac, .msupsub, .minner,
+  // or are themselves nested .mord wrappers.
+  //
+  //   depth 1 = smallest atom under the click
+  //   depth 2 = enclosing group container (parent atom/group)
+  //   depth 3 = the whole .ve-math element (single formula)
+  //
+  // Depths 4-7 fall through to the prose block path — the math click
+  // is treated as a click on its containing [data-ve-pnum] paragraph.
+  // ─────────────────────────────────────────────────────────────────────
+
+  var MATH_ATOM_SELECTOR = '.mord,.mbin,.mrel,.mop,.mopen,.mclose,.mpunct,.minner,.mfrac,.msupsub';
+
+  function mathAtomFromPoint(x, y, mathEl) {
+    if (!document.elementsFromPoint) return null;
+    var stack = document.elementsFromPoint(x, y);
+    for (var i = 0; i < stack.length; i++) {
+      var el = stack[i];
+      if (!mathEl.contains(el)) continue;
+      if (el.matches && el.matches(MATH_ATOM_SELECTOR)) return el;
+    }
+    return null;
+  }
+
+  function mathGroupFromAtom(atom, mathEl) {
+    if (!atom) return null;
+    var p = atom.parentElement;
+    while (p && p !== mathEl) {
+      if (p.matches && p.matches(MATH_ATOM_SELECTOR)) return p;
+      p = p.parentElement;
+    }
+    return null;
+  }
+
+  function paintMathSelection(mathEl, x, y, depth) {
+    if (!mathEl) return null;
+    var painted = null;
+    if (depth === 1) {
+      painted = mathAtomFromPoint(x, y, mathEl) || mathEl;
+    } else if (depth === 2) {
+      var atom = mathAtomFromPoint(x, y, mathEl);
+      painted = mathGroupFromAtom(atom, mathEl) || atom || mathEl;
+    } else {
+      painted = mathEl;
+    }
+    var entryId = 'math:' + Date.now() + ':' + Math.random().toString(36).slice(2, 8);
+    painted.setAttribute('data-ve-math-sel', entryId);
+    var src = mathEl.getAttribute('data-ve-math-source') || '';
+    var paraEl = mathEl.closest ? mathEl.closest('[data-ve-pnum]') : null;
+    var pnum = paraEl && paraEl.getAttribute ? paraEl.getAttribute('data-ve-pnum') : null;
+    var text = (painted.textContent || '').replace(/\s+/g, ' ').trim();
+    veSelection.push({
+      kind: 'math',
+      entryId: entryId,
+      depth: depth,
+      text: text.slice(0, 240),
+      formulaLatex: src,
+      paragraphId: pnum,
+      paragraphText: paraEl ? (paraEl.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 240) : null
+    });
+    updateSubmitButtonsState();
+    return entryId;
+  }
+
+  function removeMathSelection(entryId) {
+    var el = document.querySelector('[data-ve-math-sel="' + entryId + '"]');
+    if (el) el.removeAttribute('data-ve-math-sel');
+    for (var i = 0; i < veSelection.length; i++) {
+      if (veSelection[i].entryId === entryId) {
+        veSelection.splice(i, 1);
+        break;
+      }
+    }
+    updateSubmitButtonsState();
+  }
+
+  // Dispatch helper used by the chain-bump code: an entryId starting with
+  // "math:" is a sub-formula entry, otherwise it's a text entry. This way
+  // the click handler doesn't have to remember which painter ran last.
+  function removeChainSelection(entryId) {
+    if (!entryId) return;
+    if (entryId.indexOf('math:') === 0) removeMathSelection(entryId);
+    else removeTextSelection(entryId);
+  }
+
   function removeTextSelection(entryId) {
     // Inline span entry (depths 1-3): unwrap.
     var span = document.querySelector('[data-ve-text-sel="' + entryId + '"]');
@@ -2703,15 +2864,28 @@
     for (var k = 0; k < blocks.length; k++) {
       blocks[k].removeAttribute('data-ve-text-sel-block');
     }
+    var maths = document.querySelectorAll('[data-ve-math-sel]');
+    for (var m = 0; m < maths.length; m++) {
+      maths[m].removeAttribute('data-ve-math-sel');
+    }
     for (var j = veSelection.length - 1; j >= 0; j--) {
-      if (veSelection[j].kind === 'text') veSelection.splice(j, 1);
+      var k2 = veSelection[j].kind;
+      if (k2 === 'text' || k2 === 'math') veSelection.splice(j, 1);
     }
   }
 
   function handleProseClick(ev) {
     if (sending) return;
     if (ev.defaultPrevented) return;
-    if (!isInsideProseText(ev.target)) return;
+    var target = ev.target;
+    if (!target || !target.closest) return;
+    // Math click inside prose container? Route to the math grammar.
+    var inProse = target.closest('[data-ve-prose]');
+    if (!inProse) return;
+    var mathEl = target.closest('.ve-math, [data-ve-math]');
+    var isProseClick = !mathEl && isInsideProseText(target);
+    var isMathClick = !!mathEl;
+    if (!isProseClick && !isMathClick) return;
     // If the user is mid-drag (window selection has range), let the
     // snippet popup own that gesture — multi-click only fires for clean
     // collapsed-selection clicks.
@@ -2730,53 +2904,74 @@
       && Math.abs(clickX - lastClickChain.x) <= CLICK_GRACE_PX
       && Math.abs(clickY - lastClickChain.y) <= CLICK_GRACE_PX;
     if (sameChain) {
-      // Unwrap the previous depth's span FIRST so the text node is
-      // re-unified — otherwise the depth-2/3 range would have to span
-      // across element boundaries (the wrapping span + adjacent sibling
-      // text nodes), and surroundContents() throws on those.
-      if (lastClickChain.entryId) removeTextSelection(lastClickChain.entryId);
+      // Remove the previous depth's selection FIRST. For text it unwraps
+      // the inline span (so the text node re-unifies before re-painting);
+      // for math it clears the [data-ve-math-sel] attribute. The dispatch
+      // is by entryId prefix — see removeChainSelection.
+      if (lastClickChain.entryId) removeChainSelection(lastClickChain.entryId);
       lastClickChain.depth = Math.min(lastClickChain.depth + 1, 7);
     } else {
       lastClickChain = {x: clickX, y: clickY, depth: 1, entryId: null, time: now};
     }
-    // Re-resolve caret AFTER any unwrap — the text node may have changed.
-    var pos = caretInfoAt(clickX, clickY);
-    if (!pos) {
-      lastClickChain = null;
-      return;
-    }
-    var textNode = pos.node;
-    var idx = pos.offset;
-    var range = null;
     var entryId = null;
-    if (lastClickChain.depth <= 3) {
-      // Inline path: surroundContents wraps a sub-paragraph fragment.
-      if (lastClickChain.depth === 1)      range = buildLetterRange(textNode, idx);
-      else if (lastClickChain.depth === 2) range = buildWordRange(textNode, idx);
-      else                                  range = buildBlockRange(textNode, idx);
-      if (!range) return;
-      entryId = paintTextSelection(range, lastClickChain.depth, ev.target);
-    } else {
-      // Block path (Phase 3, depths 4-7): mark whole [data-ve-pnum]
-      // elements via [data-ve-text-sel-block]. Scope follows the
-      // paragraph-numbering hierarchy (see pnumScope above).
-      var paraEl = paragraphFromNode(textNode);
-      var pnum = paraEl && paraEl.getAttribute ? paraEl.getAttribute('data-ve-pnum') : null;
-      if (!pnum) {
-        // No numbered paragraph at click point — degrade to block (depth 3).
-        range = buildBlockRange(textNode, idx);
-        if (range) entryId = paintTextSelection(range, 3, ev.target);
-        if (entryId) lastClickChain.depth = 3;
+    if (isMathClick) {
+      // Math grammar (depths 1-3 = atom/group/formula; depths 4-7 fall
+      // through to the prose block path on the surrounding paragraph).
+      if (lastClickChain.depth <= 3) {
+        entryId = paintMathSelection(mathEl, clickX, clickY, lastClickChain.depth);
       } else {
-        var elements;
-        if (lastClickChain.depth === 7) {
-          // ALL text inside the prose container.
-          elements = Array.from(document.querySelectorAll('[data-ve-prose] [data-ve-pnum]'));
+        var mathPara = mathEl.closest('[data-ve-pnum]');
+        var mathPnum = mathPara && mathPara.getAttribute ? mathPara.getAttribute('data-ve-pnum') : null;
+        if (mathPnum) {
+          var melements;
+          if (lastClickChain.depth === 7) {
+            melements = Array.from(document.querySelectorAll('[data-ve-prose] [data-ve-pnum]'));
+          } else {
+            var mscope = pnumScope(mathPnum, lastClickChain.depth);
+            melements = elementsInPnumScope(mscope);
+          }
+          entryId = paintBlockSelection(melements, lastClickChain.depth);
         } else {
-          var scope = pnumScope(pnum, lastClickChain.depth);
-          elements = elementsInPnumScope(scope);
+          // No numbered paragraph around the formula — degrade to depth 3
+          // (whole formula).
+          entryId = paintMathSelection(mathEl, clickX, clickY, 3);
+          if (entryId) lastClickChain.depth = 3;
         }
-        entryId = paintBlockSelection(elements, lastClickChain.depth);
+      }
+    } else {
+      // Prose text grammar (existing depths 1-3 inline + 4-7 block).
+      // Re-resolve caret AFTER any unwrap — the text node may have changed.
+      var pos = caretInfoAt(clickX, clickY);
+      if (!pos) {
+        lastClickChain = null;
+        return;
+      }
+      var textNode = pos.node;
+      var idx = pos.offset;
+      var range = null;
+      if (lastClickChain.depth <= 3) {
+        if (lastClickChain.depth === 1)      range = buildLetterRange(textNode, idx);
+        else if (lastClickChain.depth === 2) range = buildWordRange(textNode, idx);
+        else                                  range = buildBlockRange(textNode, idx);
+        if (!range) return;
+        entryId = paintTextSelection(range, lastClickChain.depth, target);
+      } else {
+        var paraEl = paragraphFromNode(textNode);
+        var pnum = paraEl && paraEl.getAttribute ? paraEl.getAttribute('data-ve-pnum') : null;
+        if (!pnum) {
+          range = buildBlockRange(textNode, idx);
+          if (range) entryId = paintTextSelection(range, 3, target);
+          if (entryId) lastClickChain.depth = 3;
+        } else {
+          var elements;
+          if (lastClickChain.depth === 7) {
+            elements = Array.from(document.querySelectorAll('[data-ve-prose] [data-ve-pnum]'));
+          } else {
+            var scope = pnumScope(pnum, lastClickChain.depth);
+            elements = elementsInPnumScope(scope);
+          }
+          entryId = paintBlockSelection(elements, lastClickChain.depth);
+        }
       }
     }
     if (entryId) {

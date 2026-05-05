@@ -33,6 +33,23 @@ The runtime's hover glow is `drop-shadow(0 0 4px var(--ve-accent, currentColor))
 }
 ```
 
+**1b. Selection text colour (`--ve-sel-text`) — guaranteed contrast**
+
+The runtime forces every multi-click selection (`.ve-text-sel`, `[data-ve-text-sel-block]`, `[data-ve-math-sel]`) to use `--ve-sel-text` (default `#14110b`, near-black). Without this override the selected text inherits the page text colour, and accent-colour palettes whose hue overlaps with the body text — e.g. **gold accent + warm-tone body text in dark mode** — produce highlights that are nearly the same hue as the surrounding text. The selection becomes visible only by the outline, not by colour, and reading the selected substring requires squinting.
+
+The forced colour is near-black because the highlight tint (`color-mix(--ve-accent, transparent)`) is always the LIGHTER end of the accent's luminosity range — black contrasts against any light tint regardless of hue.
+
+If your accent is a dark tone (e.g. deep navy on a dark background) and black-on-tinted-navy is itself low-contrast, override on `:root`:
+
+```css
+:root { --ve-sel-text: #ffffff; }   /* white text on a dark accent highlight */
+@media (prefers-color-scheme: light) {
+  :root { --ve-sel-text: #14110b; } /* and revert to near-black in light mode */
+}
+```
+
+The runtime also forces descendants of `[data-ve-text-sel-block]` and `[data-ve-math-sel]` to `color: inherit` so KaTeX glyphs (which set their own `color`) and inline `<code>`/`<a>` children don't override the selection text colour.
+
 **2. Mirror every `:hover` palette rule to `[data-ve-selected="1"]`**
 
 For pages that override the runtime's default brightness-only highlight (e.g. graph palettes that set explicit hover colours), every `:hover` rule MUST be mirrored to `[data-ve-selected="1"]` via a comma-list selector:
@@ -172,6 +189,50 @@ At depth 4+, the selection no longer fits inside a single text node — it spans
 **Degradation rule**: if the click lands inside `[data-ve-prose]` but on text outside any `[data-ve-pnum]` (e.g. a non-numbered intro paragraph), the runtime falls back to depth-3 block selection — chain depth is also reset to 3 so the next click still bumps to 4. This avoids the "click did nothing" UX failure when the page author forgot to wrap a paragraph.
 
 **Verification baseline** (from `tests_dev/prose-depths-1-7.html`, 2026-05-05): clicking the second word of paragraph "1.1.1" with 700ms gaps produced strictly increasing scopes — d1=" " (single grapheme), d2=" " (word), d3="Third" (block), d4=full paragraph 1.1.1, d5=section 1.1 (3 paragraphs), d6=chapter 1 (5 paragraphs), d7=all 7 paragraphs across both chapters. The 700ms gap is required because shorter gaps stay within the 500ms grace window and accumulate the wrong chain.
+
+#### Phase 3 — math grammar (sub-formula depths 1-3 inside `.ve-math`)
+
+Multi-click on a `.ve-math` (or `[data-ve-math]`) element **inside `[data-ve-prose]`** activates a parallel sub-formula depth grammar. KaTeX renders LaTeX into nested `<span>` trees with predictable class names (`mord`, `mbin`, `mrel`, `mop`, `mopen`, `mclose`, `mpunct`, `minner`, `mfrac`, `msupsub`); the runtime walks that tree to find the smallest atom under the click and bubbles outward on each chain bump:
+
+| Depth | Math scope | What gets painted |
+|------:|-----------|-------------------|
+| 1 | atom | the smallest KaTeX span under the cursor (a single variable, digit, operator, or delimiter) |
+| 2 | group | the enclosing group container (parent `.mord` / `.mfrac` / `.msupsub` / `.minner`) |
+| 3 | formula | the whole `.ve-math` element |
+| 4 | paragraph | the `[data-ve-pnum]` element wrapping the formula (text + math + everything else) |
+| 5 | section | chop one segment from the paragraph number (same rule as prose depth 5) |
+| 6 | chapter | keep first segment (same rule as prose depth 6) |
+| 7 | all prose | every `[data-ve-pnum]` in the prose container |
+
+Depths 1-3 emit a `kind:"math"` entry; depths 4-7 emit a `kind:"text"` block-selection entry (identical to the prose Phase 3 path) since at that point the user's intent is "the surrounding paragraph", not "more math".
+
+```json
+{
+  "kind": "math",
+  "depth": 2,
+  "text": "c^2",
+  "formulaLatex": "E = mc^2",
+  "paragraphId": "1.2.1",
+  "paragraphText": "Einstein's mass-energy equivalence E = mc^2 holds in any inertial frame."
+}
+```
+
+`text` is what the user visually selected (the rendered glyph(s) of the painted span), capped at 240 chars. `formulaLatex` is the **full** LaTeX source of the parent `.ve-math` (read from its `data-ve-math-source` attribute, set during render) — the agent has both the local fragment and the surrounding formula and can decide how to act. `paragraphId` and `paragraphText` carry the prose context exactly like prose Phase 2 entries.
+
+**Highlight CSS** (auto-injected, not page-overrideable today):
+```css
+[data-ve-math-sel] {
+  background: color-mix(in srgb, var(--ve-accent, #b8861f) 24%, transparent);
+  border-radius: 3px;
+  outline: 1px solid color-mix(in srgb, var(--ve-accent, #b8861f) 60%, transparent);
+  outline-offset: 1px;
+}
+```
+The 24% tint sits between `.ve-text-sel`'s 32% and the block 16% — math atoms are tiny (often a single character), so they need a sharper contrast than block selections, but a heavier fill obscures the rendered glyph.
+
+**Backwards-compat for non-prose math.** `.ve-math` outside `[data-ve-prose]` (slide decks, dashboards, isolated diagrams) still uses the Phase 1 single-click `math-formula` element-toggle. The multi-click math grammar fires **only** when the formula is inside a `[data-ve-prose]` container — the same gate that scopes prose multi-click. This means slide decks and reports keep their existing single-click-to-toggle UX, while documents/articles get the depth grammar.
+
+**Painted attribute is `[data-ve-math-sel="<entryId>"]`** — placed on the atom span at depth 1, the group span at depth 2, or the `.ve-math` itself at depth 3. `removeChainSelection` dispatches by `entryId` prefix (`"math:"` → `removeMathSelection`, anything else → `removeTextSelection`) so the chain-bump unwrap is uniform across grammars.
 
 **Timeout/error sentinels** (the runner emits these when no submission arrives or when something is structurally wrong) keep their old shape too: `{"id": null, "reason": "timeout|no-file|missing-file|no-browser|...", ...}`.
 
