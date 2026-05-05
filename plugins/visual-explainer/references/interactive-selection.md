@@ -232,7 +232,61 @@ The 24% tint sits between `.ve-text-sel`'s 32% and the block 16% — math atoms 
 
 **Backwards-compat for non-prose math.** `.ve-math` outside `[data-ve-prose]` (slide decks, dashboards, isolated diagrams) still uses the Phase 1 single-click `math-formula` element-toggle. The multi-click math grammar fires **only** when the formula is inside a `[data-ve-prose]` container — the same gate that scopes prose multi-click. This means slide decks and reports keep their existing single-click-to-toggle UX, while documents/articles get the depth grammar.
 
-**Painted attribute is `[data-ve-math-sel="<entryId>"]`** — placed on the atom span at depth 1, the group span at depth 2, or the `.ve-math` itself at depth 3. `removeChainSelection` dispatches by `entryId` prefix (`"math:"` → `removeMathSelection`, anything else → `removeTextSelection`) so the chain-bump unwrap is uniform across grammars.
+**Painted attribute is `[data-ve-math-sel="<entryId>"]`** — placed on the atom span at depth 1, the group span at depth 2, or the `.ve-math` itself at depth 3. `removeChainSelection` dispatches by `entryId` prefix (`"math:"` → `removeMathSelection`, `"code:"` → `removeCodeSelection`, anything else → `removeTextSelection`) so the chain-bump unwrap is uniform across grammars.
+
+#### Phase 3 — code grammar (token / line / block depths 1-3 inside `<pre>`)
+
+Multi-click on any `<pre>` (or any descendant — typically a `<code>`) **inside `[data-ve-prose]`** activates the code depth grammar:
+
+| Depth | Code scope | What gets painted |
+|------:|-----------|-------------------|
+| 1 | token | the smallest token under the cursor — Prism's `.token` ancestor or a highlight.js `.hljs-*` span if present, otherwise a word-range from the caret position |
+| 2 | line  | the line containing the click, bounded by `\n` (single-character empty lines wrap a 1-char range so `surroundContents` succeeds) |
+| 3 | block | the whole `<pre>` element |
+| 4 | paragraph | the nearest `[data-ve-pnum]` (climbing the prose hierarchy from the `<pre>`'s containing element, **or** the closest preceding `[data-ve-pnum]` in document order if `<pre>` has no numbered ancestor — the runtime's `PARA_TAGS` defaults to `PRE: 0` so `<pre>` isn't auto-numbered) |
+| 5 | section | chop one segment from that paragraph number |
+| 6 | chapter | keep first segment |
+| 7 | all prose | every `[data-ve-pnum]` in the prose container |
+
+Depths 1-3 emit `kind:"code"` entries; depths 4-7 emit `kind:"text"` block-selection entries (same as the prose / math fallthrough).
+
+```json
+{
+  "kind": "code",
+  "depth": 2,
+  "text": "function fib(n) {",
+  "language": "javascript",
+  "codeId": null,
+  "paragraphId": "1.1.1",
+  "paragraphText": "1.1.1 The classic Fibonacci function:"
+}
+```
+
+`language` is read from `<pre data-language="…">` first, then from a `<code class="language-…">` inside the `<pre>` (Prism's convention). `codeId` is the `<pre>`'s `data-ve-id` if present, else `null`. `paragraphId` is the **closest containing or preceding** numbered element so the agent can name the section even when the `<pre>` itself isn't numbered.
+
+**Highlight CSS** (auto-injected):
+```css
+[data-ve-code-sel] {       /* depths 1-2 — inline span over a token or a line */
+  background: color-mix(in srgb, var(--ve-accent, #b8861f) 22%, transparent);
+  color: var(--ve-sel-text);
+  border-radius: 3px;
+  outline: 1px solid color-mix(in srgb, var(--ve-accent, #b8861f) 65%, transparent);
+  outline-offset: 1px;
+}
+[data-ve-code-sel-block] { /* depth 3 — whole <pre> */
+  background: color-mix(in srgb, var(--ve-accent, #b8861f) 14%, transparent);
+  color: var(--ve-sel-text);
+  border-radius: 6px;
+  outline: 1.5px solid color-mix(in srgb, var(--ve-accent, #b8861f) 55%, transparent);
+  outline-offset: 3px;
+}
+[data-ve-code-sel] *, [data-ve-code-sel-block] * { color: inherit; }
+```
+The descendant `color: inherit` is critical when Prism / highlight.js are loaded — both syntax highlighters set explicit `color` on per-token spans, and without `inherit` the selection's `--ve-sel-text` would lose to the per-span colour.
+
+**Backwards-compat for non-prose `<pre>`.** A `<pre>` outside `[data-ve-prose]` (a slide-deck code card, a dashboard widget) keeps the Phase 1 element-click toggle (when stamped with `data-ve-id`). The depth grammar fires **only** inside `[data-ve-prose]`.
+
+**Verified empirically** (2026-05-05) against `tests_dev/prose-code-depths-1-7.html`: clicking the `i` of `fib` in `function fib(n) { … }` 7 times at 200 ms intervals produced d1=`fib`, d2=`function fib(n) {`, d3=full Fibonacci block, d4=section 1.1.1 (3 paragraphs around the `<pre>`), d5=section 1.1, d6=chapter 1, d7=all 7 numbered elements.
 
 **Timeout/error sentinels** (the runner emits these when no submission arrives or when something is structurally wrong) keep their old shape too: `{"id": null, "reason": "timeout|no-file|missing-file|no-browser|...", ...}`.
 

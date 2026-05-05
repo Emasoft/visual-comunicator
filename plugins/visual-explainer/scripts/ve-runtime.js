@@ -341,6 +341,33 @@
       // variables, operator glyphs, etc.). Force descendant inherit so
       // the math selection actually wins.
       '[data-ve-math-sel] * { color: inherit; }',
+      // Phase 3 — code highlight for <pre>/<code> blocks. Token (depth 1)
+      // and line (depth 2) selections are inline; block (depth 3) wraps
+      // the whole <pre>. Outline is brighter than the math selection
+      // because syntax-highlighted code typically already uses many
+      // colours, and a faint outline gets lost.
+      '[data-ve-code-sel] {',
+      '  background: color-mix(in srgb, var(--ve-accent, #b8861f) 22%, transparent);',
+      '  color: var(--ve-sel-text);',
+      '  border-radius: 3px;',
+      '  outline: 1px solid color-mix(in srgb, var(--ve-accent, #b8861f) 65%, transparent);',
+      '  outline-offset: 1px;',
+      '}',
+      // Prism / highlight.js use explicit `color` on per-token spans.
+      // Force descendants to inherit so the selection wins regardless of
+      // the syntax-highlight palette.
+      '[data-ve-code-sel] * { color: inherit; }',
+      // Block-level <pre> selection paints the whole block. Slightly
+      // darker tint than the inline code-sel because it covers a much
+      // larger area (full code block vs single token).
+      '[data-ve-code-sel-block] {',
+      '  background: color-mix(in srgb, var(--ve-accent, #b8861f) 14%, transparent);',
+      '  color: var(--ve-sel-text);',
+      '  border-radius: 6px;',
+      '  outline: 1.5px solid color-mix(in srgb, var(--ve-accent, #b8861f) 55%, transparent);',
+      '  outline-offset: 3px;',
+      '}',
+      '[data-ve-code-sel-block] * { color: inherit; }',
       // Mermaid nodes (handled separately because their .node class isn\'t
       // wrapped in [data-ve-id] until veSelectMermaid is wired):
       '.mermaid .node { cursor:pointer; }',
@@ -2817,12 +2844,153 @@
     updateSubmitButtonsState();
   }
 
-  // Dispatch helper used by the chain-bump code: an entryId starting with
-  // "math:" is a sub-formula entry, otherwise it's a text entry. This way
-  // the click handler doesn't have to remember which painter ran last.
+  // ─────────────────────────────────────────────────────────────────────
+  // Phase 3 — code selection (depths 1-3 inside <pre>/<code> blocks).
+  //
+  //   depth 1 = TOKEN (single keyword/identifier/literal — Prism .token
+  //              ancestor if present, otherwise word-range via caret)
+  //   depth 2 = LINE  (the line containing the click, bounded by \n)
+  //   depth 3 = BLOCK (the whole <pre> element)
+  //   depth 4-7 = paragraph/section/chapter/all (prose hierarchy fallthrough)
+  //
+  // Token + line both wrap a Range via surroundContents (similar to the
+  // prose inline path). Block stamps [data-ve-code-sel-block] on the
+  // <pre> itself.
+  // ─────────────────────────────────────────────────────────────────────
+
+  function codeTokenAtPoint(x, y, preEl) {
+    // If the click landed on a Prism .token / highlight.js .hljs-* span,
+    // use that span's bounds. Otherwise fall back to a word-range from
+    // the text node under the caret.
+    if (document.elementsFromPoint) {
+      var stack = document.elementsFromPoint(x, y);
+      for (var i = 0; i < stack.length; i++) {
+        var el = stack[i];
+        if (!preEl.contains(el)) continue;
+        var cls = el.className || '';
+        if (typeof cls !== 'string') continue;
+        if (cls.indexOf('token') >= 0 || cls.indexOf('hljs-') >= 0) {
+          var r = document.createRange();
+          r.selectNodeContents(el);
+          return r;
+        }
+      }
+    }
+    var pos = caretInfoAt(x, y);
+    if (!pos) return null;
+    return buildWordRange(pos.node, pos.offset);
+  }
+
+  function codeLineRangeAt(x, y, preEl) {
+    var pos = caretInfoAt(x, y);
+    if (!pos || !pos.node || pos.node.nodeType !== 3) return null;
+    var text = pos.node.textContent || '';
+    var idx = pos.offset;
+    var left = idx;
+    while (left > 0 && text.charAt(left - 1) !== '\n') left--;
+    var right = idx;
+    while (right < text.length && text.charAt(right) !== '\n') right++;
+    if (left === right) {
+      // Empty line — pick a single-character range so surroundContents
+      // can still wrap something visible.
+      if (right < text.length) right = Math.min(right + 1, text.length);
+      else if (left > 0) left = Math.max(left - 1, 0);
+      else return null;
+    }
+    var range = document.createRange();
+    range.setStart(pos.node, left);
+    range.setEnd(pos.node, right);
+    return range;
+  }
+
+  function paintCodeInlineSelection(range, depth) {
+    if (!range) return null;
+    var entryId = 'code:' + Date.now() + ':' + Math.random().toString(36).slice(2, 8);
+    var span = document.createElement('span');
+    span.setAttribute('data-ve-code-sel', entryId);
+    try {
+      range.surroundContents(span);
+    } catch (e) {
+      // Range crossed element boundaries (e.g. spans Prism token
+      // boundaries on a multi-character word). Re-extract as a fragment
+      // and re-wrap; the visual highlight is the same.
+      var frag = range.extractContents();
+      span.appendChild(frag);
+      range.insertNode(span);
+    }
+    var pre = span.closest('pre');
+    var lang = pre && pre.getAttribute('data-language')
+      || (pre && pre.querySelector('code') ? pre.querySelector('code').className.replace(/.*language-([\w+-]+).*/, '$1') : null)
+      || null;
+    var codeId = pre && pre.getAttribute('data-ve-id') || null;
+    var paraEl = pre && pre.closest ? pre.closest('[data-ve-pnum]') : null;
+    var pnum = paraEl && paraEl.getAttribute ? paraEl.getAttribute('data-ve-pnum') : null;
+    veSelection.push({
+      kind: 'code',
+      entryId: entryId,
+      depth: depth,
+      text: (span.textContent || '').slice(0, 5000),
+      language: lang,
+      codeId: codeId,
+      paragraphId: pnum,
+      paragraphText: paraEl ? (paraEl.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 240) : null
+    });
+    updateSubmitButtonsState();
+    return entryId;
+  }
+
+  function paintCodeBlockSelection(preEl) {
+    if (!preEl) return null;
+    var entryId = 'code:' + Date.now() + ':' + Math.random().toString(36).slice(2, 8);
+    preEl.setAttribute('data-ve-code-sel-block', entryId);
+    var lang = preEl.getAttribute('data-language')
+      || (preEl.querySelector('code') ? preEl.querySelector('code').className.replace(/.*language-([\w+-]+).*/, '$1') : null)
+      || null;
+    var codeId = preEl.getAttribute('data-ve-id') || null;
+    var paraEl = preEl.closest ? preEl.closest('[data-ve-pnum]') : null;
+    var pnum = paraEl && paraEl.getAttribute ? paraEl.getAttribute('data-ve-pnum') : null;
+    veSelection.push({
+      kind: 'code',
+      entryId: entryId,
+      depth: 3,
+      text: (preEl.textContent || '').slice(0, 5000),
+      language: lang,
+      codeId: codeId,
+      paragraphId: pnum,
+      paragraphText: paraEl ? (paraEl.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 240) : null
+    });
+    updateSubmitButtonsState();
+    return entryId;
+  }
+
+  function removeCodeSelection(entryId) {
+    // Inline span entry (depths 1-2): unwrap.
+    var span = document.querySelector('[data-ve-code-sel="' + entryId + '"]');
+    if (span && span.parentNode) {
+      var parent = span.parentNode;
+      while (span.firstChild) parent.insertBefore(span.firstChild, span);
+      parent.removeChild(span);
+      if (parent.normalize) parent.normalize();
+    }
+    // Block entry (depth 3): clear marker on the <pre>.
+    var blockEl = document.querySelector('[data-ve-code-sel-block="' + entryId + '"]');
+    if (blockEl) blockEl.removeAttribute('data-ve-code-sel-block');
+    for (var i = 0; i < veSelection.length; i++) {
+      if (veSelection[i].entryId === entryId) {
+        veSelection.splice(i, 1);
+        break;
+      }
+    }
+    updateSubmitButtonsState();
+  }
+
+  // Dispatch helper used by the chain-bump code: an entryId's prefix tells
+  // which painter ran ("math:" → math, "code:" → code, otherwise text).
+  // The click handler doesn't have to remember which painter ran last.
   function removeChainSelection(entryId) {
     if (!entryId) return;
     if (entryId.indexOf('math:') === 0) removeMathSelection(entryId);
+    else if (entryId.indexOf('code:') === 0) removeCodeSelection(entryId);
     else removeTextSelection(entryId);
   }
 
@@ -2868,9 +3036,22 @@
     for (var m = 0; m < maths.length; m++) {
       maths[m].removeAttribute('data-ve-math-sel');
     }
+    var codes = document.querySelectorAll('[data-ve-code-sel]');
+    for (var c = 0; c < codes.length; c++) {
+      var cs = codes[c];
+      var cp = cs.parentNode;
+      if (!cp) continue;
+      while (cs.firstChild) cp.insertBefore(cs.firstChild, cs);
+      cp.removeChild(cs);
+      if (cp.normalize) cp.normalize();
+    }
+    var codeBlocks = document.querySelectorAll('[data-ve-code-sel-block]');
+    for (var cb = 0; cb < codeBlocks.length; cb++) {
+      codeBlocks[cb].removeAttribute('data-ve-code-sel-block');
+    }
     for (var j = veSelection.length - 1; j >= 0; j--) {
       var k2 = veSelection[j].kind;
-      if (k2 === 'text' || k2 === 'math') veSelection.splice(j, 1);
+      if (k2 === 'text' || k2 === 'math' || k2 === 'code') veSelection.splice(j, 1);
     }
   }
 
@@ -2879,13 +3060,15 @@
     if (ev.defaultPrevented) return;
     var target = ev.target;
     if (!target || !target.closest) return;
-    // Math click inside prose container? Route to the math grammar.
+    // Math/code click inside prose container? Route to the right grammar.
     var inProse = target.closest('[data-ve-prose]');
     if (!inProse) return;
     var mathEl = target.closest('.ve-math, [data-ve-math]');
-    var isProseClick = !mathEl && isInsideProseText(target);
+    var preEl = !mathEl && target.closest('pre');
     var isMathClick = !!mathEl;
-    if (!isProseClick && !isMathClick) return;
+    var isCodeClick = !!preEl;
+    var isProseClick = !mathEl && !preEl && isInsideProseText(target);
+    if (!isProseClick && !isMathClick && !isCodeClick) return;
     // If the user is mid-drag (window selection has range), let the
     // snippet popup own that gesture — multi-click only fires for clean
     // collapsed-selection clicks.
@@ -2935,6 +3118,53 @@
           // No numbered paragraph around the formula — degrade to depth 3
           // (whole formula).
           entryId = paintMathSelection(mathEl, clickX, clickY, 3);
+          if (entryId) lastClickChain.depth = 3;
+        }
+      }
+    } else if (isCodeClick) {
+      // Code grammar (depths 1-3 = token/line/whole-block; depths 4-7
+      // fall through to the prose block path on the surrounding paragraph,
+      // identical to the math fallthrough).
+      if (lastClickChain.depth === 1) {
+        var tokenRange = codeTokenAtPoint(clickX, clickY, preEl);
+        if (tokenRange) entryId = paintCodeInlineSelection(tokenRange, 1);
+      } else if (lastClickChain.depth === 2) {
+        var lineRange = codeLineRangeAt(clickX, clickY, preEl);
+        if (lineRange) entryId = paintCodeInlineSelection(lineRange, 2);
+      } else if (lastClickChain.depth === 3) {
+        entryId = paintCodeBlockSelection(preEl);
+      } else {
+        // For depths 4-7 from a code click: find the [data-ve-pnum] anchor.
+        // <pre> isn't auto-numbered (PARA_TAGS has PRE: 0), so the closest
+        // ancestor often returns null. Fall back to the nearest PRECEDING
+        // numbered element in document order — that's the heading or
+        // paragraph that introduces this code block, which is the natural
+        // scope for "select the section around this code".
+        var codePara = preEl.closest('[data-ve-pnum]');
+        if (!codePara) {
+          var allNumbered = document.querySelectorAll('[data-ve-prose] [data-ve-pnum]');
+          for (var an = allNumbered.length - 1; an >= 0; an--) {
+            var cmp = preEl.compareDocumentPosition(allNumbered[an]);
+            if (cmp & Node.DOCUMENT_POSITION_PRECEDING) {
+              codePara = allNumbered[an];
+              break;
+            }
+          }
+        }
+        var codePnum = codePara && codePara.getAttribute ? codePara.getAttribute('data-ve-pnum') : null;
+        if (codePnum) {
+          var celements;
+          if (lastClickChain.depth === 7) {
+            celements = Array.from(document.querySelectorAll('[data-ve-prose] [data-ve-pnum]'));
+          } else {
+            var cscope = pnumScope(codePnum, lastClickChain.depth);
+            celements = elementsInPnumScope(cscope);
+          }
+          entryId = paintBlockSelection(celements, lastClickChain.depth);
+        } else {
+          // No numbered paragraph anywhere — degrade to depth 3 (whole
+          // code block).
+          entryId = paintCodeBlockSelection(preEl);
           if (entryId) lastClickChain.depth = 3;
         }
       }
