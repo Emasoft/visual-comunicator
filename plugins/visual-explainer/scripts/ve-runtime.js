@@ -3237,12 +3237,142 @@
     window.addEventListener('scroll', clearSnippetPopup, { passive: true });
   }
 
+  // ─────────────────────────────────────────────────────────────────────
+  // Regex visualizer + editor (vendored Bowen7/regex-vis, MIT).
+  //
+  // Pages opt in by writing:
+  //   <div class="ve-regex" data-regex="^(\d{3})-(\d{4})$"></div>
+  //
+  // The runtime lazy-loads ve-regex.umd.js + ve-regex.css from the same
+  // directory it itself was loaded from (parallel to KaTeX / viz.js /
+  // TikZJax — except this bundle is hosted in our own scripts/ folder
+  // rather than a CDN). On mount, every edit-panel commit pushes a
+  // {kind:"regex-edit", original, edited, ast} entry into veSelection
+  // so the agent sees the user's modified regex on submit.
+  // ─────────────────────────────────────────────────────────────────────
+
+  var regexLoading = null;
+
+  function veRuntimeScriptBase() {
+    // Where is ve-runtime.js sitting? Used to compute the sibling URL for
+    // ve-regex.umd.js / ve-regex.css. Three sources, in order:
+    //   1. window.veRuntimeBase if the page set it explicitly
+    //   2. The <script src="…/ve-runtime.js"> tag in the DOM
+    //   3. document.currentScript (only valid synchronously)
+    if (window.veRuntimeBase) return window.veRuntimeBase.replace(/\/$/, '');
+    var tags = document.getElementsByTagName('script');
+    for (var i = tags.length - 1; i >= 0; i--) {
+      var src = tags[i].src || '';
+      var m = src.match(/^(.*\/)ve-runtime\.js(?:\?.*)?$/);
+      if (m) return m[1].replace(/\/$/, '');
+    }
+    if (document.currentScript && document.currentScript.src) {
+      var s = document.currentScript.src;
+      return s.substring(0, s.lastIndexOf('/'));
+    }
+    // Fallback: same-origin relative path. Works when the page is opened
+    // from a file:// URL with everything in the same directory.
+    return '.';
+  }
+
+  function loadRegexBundle() {
+    if (window.VeRegex && typeof window.VeRegex.render === 'function') {
+      return Promise.resolve(window.VeRegex);
+    }
+    if (regexLoading) return regexLoading;
+    var base = veRuntimeScriptBase();
+    regexLoading = new Promise(function (resolve, reject) {
+      // Inject CSS first so it's ready when React mounts.
+      if (!document.querySelector('link[data-ve-regex-css]')) {
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = base + '/ve-regex.css';
+        link.setAttribute('data-ve-regex-css', '1');
+        document.head.appendChild(link);
+      }
+      var script = document.createElement('script');
+      script.src = base + '/ve-regex.umd.js';
+      script.async = true;
+      script.onload = function () {
+        if (window.VeRegex && typeof window.VeRegex.render === 'function') {
+          resolve(window.VeRegex);
+        } else {
+          reject(new Error('ve-regex.umd.js loaded but window.VeRegex.render missing'));
+        }
+      };
+      script.onerror = function () { reject(new Error('Failed to load ve-regex.umd.js')); };
+      document.head.appendChild(script);
+    });
+    return regexLoading;
+  }
+
+  function pushRegexEdit(el, original, edited, ast) {
+    if (original === edited) return;
+    var entryId = 'regex:' + Date.now() + ':' + Math.random().toString(36).slice(2, 8);
+    // Replace any existing edit entry for this same wrapper so the user
+    // sees only the latest change per regex block — matching the way
+    // multi-click chains replace rather than accumulate.
+    var existing = el.getAttribute('data-ve-regex-entry-id');
+    if (existing) {
+      for (var i = veSelection.length - 1; i >= 0; i--) {
+        if (veSelection[i].entryId === existing) { veSelection.splice(i, 1); break; }
+      }
+    }
+    el.setAttribute('data-ve-regex-entry-id', entryId);
+    veSelection.push({
+      kind: 'regex-edit',
+      entryId: entryId,
+      regexId: el.getAttribute('data-ve-id') || null,
+      original: original,
+      edited: edited,
+      ast: ast || null,
+    });
+    updateSubmitButtonsState();
+  }
+
+  function mountRegexElement(el, VeRegex) {
+    if (el.__veRegexMounted) return;
+    el.__veRegexMounted = true;
+    var original = el.getAttribute('data-regex') || '';
+    if (!el.hasAttribute('data-ve-id')) {
+      el.setAttribute('data-ve-id', 've-regex-' + Math.random().toString(36).slice(2, 8));
+    }
+    if (!el.hasAttribute('data-ve-type')) el.setAttribute('data-ve-type', 'regex');
+    if (!el.hasAttribute('data-ve-label')) el.setAttribute('data-ve-label', 'Regex: ' + original.slice(0, 60));
+    try {
+      VeRegex.render(el, {
+        regex: original,
+        onChange: function (next) {
+          pushRegexEdit(el, original, next.regex, next.ast);
+        },
+      });
+    } catch (err) {
+      console.warn('[ve-runtime] regex mount failed:', err);
+      el.textContent = 'Regex render failed: ' + (err && err.message ? err.message : err);
+    }
+  }
+
+  function initAllRegex() {
+    var elements = document.querySelectorAll('.ve-regex[data-regex], [data-ve-regex][data-regex]');
+    if (!elements.length) return;
+    loadRegexBundle().then(function (VeRegex) {
+      for (var i = 0; i < elements.length; i++) mountRegexElement(elements[i], VeRegex);
+    }).catch(function (err) {
+      console.warn('[ve-runtime] regex bundle disabled:', err);
+      for (var j = 0; j < elements.length; j++) {
+        var src = elements[j].getAttribute('data-regex') || '';
+        elements[j].textContent = 'Regex (could not load visualizer): ' + src;
+      }
+    });
+  }
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {
       injectStyles();
       initAllMath();      // KaTeX, lazy
       initAllTikz();      // TikZJax, lazy
       initAllGraphs();    // viz.js (Graphviz), lazy
+      initAllRegex();     // regex-vis, lazy from same-origin scripts/
       initAllProse();
       enhanceFocus();
       initAllTableForms();
@@ -3254,6 +3384,7 @@
     initAllMath();
     initAllTikz();
     initAllGraphs();
+    initAllRegex();
     initAllProse();
     enhanceFocus();
     initAllTableForms();

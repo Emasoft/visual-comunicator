@@ -3,7 +3,7 @@
 **TRDD ID:** `bdf0cc34-539e-4c9d-9773-2375184934c4`
 **Filename:** `design/tasks/TRDD-bdf0cc34-539e-4c9d-9773-2375184934c4-regex-vis-component.md`
 **Tracked in:** this repo (design/tasks/ is git-tracked)
-**Status:** Phases 0 + 1 + 2 complete. Bundle builds, renders, and is themed to the plugin palette. Phase 3 (ve-runtime integration) next.
+**Status:** Phases 0 + 1 + 2 + 3 complete. Bundle builds, renders, themed, and lazy-loaded by `ve-runtime.js` on `.ve-regex[data-regex]` markup. Phase 4 (test page + cookbook docs) next.
 **Created:** 2026-05-05
 **Plugin:** visual-explainer
 
@@ -253,3 +253,41 @@ plugins/visual-explainer/scripts/
 ```
 
 Three files. Drop-in. The plugin is themed and ready for Phase 3 (the runtime hook that lazy-loads these on `.ve-regex[data-regex]`).
+
+## 16. Phase 3 — runtime hook + selection integration
+
+`ve-runtime.js` now ships an `initAllRegex()` step that runs alongside `initAllMath()` / `initAllTikz()` / `initAllGraphs()` at boot:
+
+1. **Detect** — `document.querySelectorAll('.ve-regex[data-regex], [data-ve-regex][data-regex]')`. If the page has no regex blocks, the bundle never loads.
+2. **Resolve same-origin URL** — `veRuntimeScriptBase()` walks `<script>` tags to find the `ve-runtime.js` src and returns the parent directory. Falls back to `window.veRuntimeBase` (page override) or `document.currentScript`. The CSS + JS are loaded from `<base>/ve-regex.css` and `<base>/ve-regex.umd.js`.
+3. **Lazy-load** — `loadRegexBundle()` resolves a Promise once `window.VeRegex.render` is callable. Subsequent regex elements share the same Promise (one-shot init).
+4. **Mount** — `mountRegexElement(el, VeRegex)` calls `VeRegex.render(el, {regex, onChange})`. Auto-stamps `data-ve-id` (random suffix), `data-ve-type="regex"`, `data-ve-label="Regex: <first 60 chars>"` so the wrapper participates in Phase 1 element selection.
+5. **Edit-panel commit** — `onChange({regex, ast})` fires whenever the upstream's `gen()` produces a different regex string than the original. `pushRegexEdit()` pushes a `{kind:"regex-edit", regexId, original, edited, ast}` entry into `veSelection`. Subsequent edits on the same wrapper REPLACE the prior entry (tracked via `data-ve-regex-entry-id`) so the user only sees the latest version per regex block.
+
+Wire-format payload:
+```json
+{
+  "kind": "regex-edit",
+  "regexId": "ve-regex-8ksd42",
+  "original": "^([a-z]+)@([a-z]+)\\.com$",
+  "edited":   "^([a-z]+)@([a-z]+)\\.(com|org|net)$",
+  "ast": { ... }
+}
+```
+
+`ast` is the upstream's `AST.Regex` node tree — the same one the parser produced. Lets the agent reason about the change without re-parsing.
+
+Page integration looks like:
+```html
+<div class="ve-regex" data-regex="^(\d{3})-(\d{4})$"></div>
+<script src="ve-runtime.js"></script>
+```
+That's it. No imports, no manual `VeRegex.render` calls.
+
+Verified `tests_dev/regex-vis-runtime-hook.html` — three blocks (email validator, US phone with optional parens, ISO date with month/day alternation), all auto-mount, all themed, IDs auto-assigned, CSS link injected once, `veSelection` correctly stays empty until an actual edit-panel commit.
+
+Failure-mode handling:
+- If the bundle fails to load (network down, file missing), each `.ve-regex` wrapper falls back to plain text showing the regex source so the user at least sees what was supposed to render.
+- React mount errors are caught and logged via `console.warn('[ve-runtime] regex mount failed:', err)` plus a one-line in-place error message.
+
+Bundle still 484 KB / 151 KB gz (Phase 3 only added runtime glue, no source changes).
