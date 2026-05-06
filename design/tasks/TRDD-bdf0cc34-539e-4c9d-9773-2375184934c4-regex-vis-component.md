@@ -3,7 +3,7 @@
 **TRDD ID:** `bdf0cc34-539e-4c9d-9773-2375184934c4`
 **Filename:** `design/tasks/TRDD-bdf0cc34-539e-4c9d-9773-2375184934c4-regex-vis-component.md`
 **Tracked in:** this repo (design/tasks/ is git-tracked)
-**Status:** Phases 0 + 1 + 2 + 3 complete. Bundle builds, renders, themed, and lazy-loaded by `ve-runtime.js` on `.ve-regex[data-regex]` markup. Phase 4 (test page + cookbook docs) next.
+**Status:** All five phases complete (0 + 1 + 2 + 3 + 4). Component is shipped: build pipeline + bundle + theme + runtime hook + test pages + cookbook docs. End users can write `<div class="ve-regex" data-regex="…">` and get a themed, interactive regex graph + edit panel that submits `kind:"regex-edit"` entries via the standard selection wire format.
 **Created:** 2026-05-05
 **Plugin:** visual-explainer
 

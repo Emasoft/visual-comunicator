@@ -48,7 +48,7 @@ The plugin runtime (`ve-runtime.js`) lazy-loads `scripts/ve-regex.umd.js` + `scr
 - [x] Phase 1 — `npm install` and produce the first un-themed UMD bundle. Smoke test green: 484 KB / **151 KB gzipped**, renders the graph SVG correctly. See TRDD §12 for the five build adjustments.
 - [x] Phase 2 — Tailwind compiles via PostCSS, theme tokens redefined to the plugin's gold/cream/coffee palette in `src/global.css`. Bundle now ships `ve-regex.css` (30 KB / 6 KB gz) sibling to the UMD. Light + dark mode both verified via dev-browser headless. See TRDD §14.
 - [x] Phase 3 — `ve-runtime.js` lazy-loads the bundle from same-origin on `.ve-regex[data-regex]` markup; mount; edit-panel commits push `{kind:"regex-edit", regexId, original, edited, ast}` into `veSelection` with replace-on-resave so only the latest edit per wrapper is sent. Three sample blocks verified in `tests_dev/regex-vis-runtime-hook.html`. See TRDD §16.
-- [ ] Phase 4 — test page `tests_dev/regex-vis-test.html` + cookbook docs
+- [x] Phase 4 — SKILL.md mentions `.ve-regex` in the same paragraph block that lists `.ve-math` / `.ve-tikz` / `.ve-graph`. Cookbook (`references/interactive-selection.md`) gets a dedicated "Regex visualizer + editor" section with the auto-stamped attributes table, the wire-format payload, authoring guidance, and failure-handling notes. The "Required follow-up" template now includes `regex-edit` alongside `text` / `math` / `code` so the agent knows what to say when the user submits a regex mutation.
 
 ## What changed from upstream
 

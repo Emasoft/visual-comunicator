@@ -303,6 +303,17 @@ Branch on `kind` first, then `count`:
 
 …then wait for the user's instruction.
 
+For per-entry kinds beyond `element`, branch a second time on the entry's own `kind` field:
+
+| Entry kind        | Open with                                                                                                |
+|-------------------|----------------------------------------------------------------------------------------------------------|
+| `text`            | "You picked the snippet **«text»** (paragraph «paragraphId» at depth «depth»). What should I do with it?" |
+| `math` (depth 1-3)| "You picked the math fragment **«text»** inside the formula `«formulaLatex»`. What should I do with it?" |
+| `code` (depth 1-3)| "You picked **«text»** in the code block (`«language»`). What should I do with it?"                       |
+| `regex-edit`      | "You changed the regex from `«original»` to `«edited»`. Want me to update the test cases / explanation / surrounding code?" |
+
+`regex-edit` is special — it represents a USER-AUTHORED MUTATION rather than a click on an existing element. The `original` and `edited` strings + the `ast` give the agent everything needed to act on the change without re-prompting.
+
 ---
 
 ## What to make selectable
@@ -418,6 +429,62 @@ Clicking a datapoint sends:
 ```
 
 > **Future:** range/interval selection (drag x1→x2) is on the roadmap. For now, single-point selection only; if the user wants an interval, they click one endpoint and tell the agent about the other in their reply.
+
+---
+
+## Regex visualizer + editor (`.ve-regex`)
+
+For pages that explain or iterate on a regular-expression pattern, the runtime ships a vendored, re-skinned copy of [Bowen7/regex-vis](https://github.com/Bowen7/regex-vis) (MIT, see project-root `THIRD_PARTY_NOTICES.md`). One opt-in element renders both the SVG flow-graph AND the side panel where the user can mutate the regex visually:
+
+```html
+<div class="ve-regex" data-regex="^([a-z]+)@([a-z]+)\.com$"></div>
+```
+
+(The runtime also accepts `[data-ve-regex][data-regex]` if the `.ve-regex` class collides with something on the host page.)
+
+The runtime auto-detects this element at boot, lazy-loads `ve-regex.umd.js` + `ve-regex.css` from the same directory it itself was loaded from (so a self-contained page just works), then mounts the React component into the wrapper. The bundle is ~150 KB gzipped — only loaded when at least one regex element exists on the page. Each wrapper gets its own isolated Jotai store so multiple regex blocks on the same page never collide on AST state.
+
+### Auto-stamped attributes
+
+After mount, the wrapper carries:
+
+| Attribute | Value | Purpose |
+|---|---|---|
+| `data-ve-id` | `ve-regex-<random>` | Phase 1 element-selection identity |
+| `data-ve-type` | `regex` | Selection type hint |
+| `data-ve-label` | `Regex: <first 60 chars>` | Display label in the agent's reply |
+| `data-ve-regex-entry-id` | `regex:<timestamp>:<random>` | Tracks the latest edit so re-saves replace, not accumulate |
+
+A single click on the wrapper background still fires the Phase 1 element-toggle (selects the whole regex block as one entry). The Edit-tab interactions are scoped inside the React mount and do NOT propagate as element clicks.
+
+### Wire-format payload — `kind:"regex-edit"`
+
+When the user opens the Edit tab and mutates the regex (changes a quantifier, adds a character class, splits a group, swaps `+` for `*`, etc.), the runtime detects that the regenerated regex string differs from the original and pushes:
+
+```json
+{
+  "kind": "regex-edit",
+  "regexId": "ve-regex-8ksd42",
+  "original": "^([a-z]+)@([a-z]+)\\.com$",
+  "edited":   "^([a-z]+)@([a-z]+)\\.(com|org|net)$",
+  "ast": { "type": "regex", "body": [ … ], "flags": [], "literal": true }
+}
+```
+
+`ast` is the upstream's full `AST.Regex` node tree — the same one their parser produced. The agent gets both the local diff (compare `original` and `edited` strings) and the structured AST (walk to find what changed) without re-parsing.
+
+Subsequent edits on the **same** wrapper REPLACE the prior entry rather than accumulate — `data-ve-regex-entry-id` tracks which entry to evict. So if the user makes three rounds of changes before submitting, the agent receives only the final regex.
+
+### Authoring guidance
+
+- **Use this for**: explaining a regex to a user, comparing two alternative patterns side-by-side, helping the user fix a broken regex, asking "which of these matches your intent?", any iterative regex-design session.
+- **Don't use it for**: prose that just mentions a regex inline — use `<code>` for that. It's also wrong for non-JavaScript regex flavours (PCRE, RE2, Ruby, .NET) — the parser only understands JS regex.
+- **Multiple blocks per page**: fine. Each gets its own state; one user can edit several regexes in a single session and submit all of them at once.
+- **Theme**: zero CSS to write. The bundle ships its own `ve-regex.css` already themed to the plugin's gold/cream/coffee palette (light + dark via `prefers-color-scheme`). Just make sure the page's `:root` defines `--ve-accent` (already a runtime requirement).
+
+### Failure handling
+
+If the bundle fails to load (network down, file missing), each `.ve-regex` wrapper falls back to plain text showing the regex source — the user at least sees what was supposed to render. The runtime logs a `console.warn('[ve-runtime] regex bundle disabled: …')` for debugging.
 
 ---
 
