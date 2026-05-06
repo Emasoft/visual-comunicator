@@ -4606,25 +4606,55 @@
     commentHoverPill.style.pointerEvents = 'auto';
   }
 
-  function hideCommentHoverPill() {
+  // Standard tooltip hover-bridge pattern: schedule the hide on mouseleave
+  // with a small grace window, and cancel the timer when the pointer
+  // re-enters either the anchor or the pill itself. Without this, the
+  // mouseleave that fires the moment the pointer crosses from the
+  // commentable element onto the pill clears `commentHoverTarget` and
+  // hides the pill BEFORE the click event registers — making the
+  // affordance physically unreachable for real users.
+  var commentPillHideTimer = null;
+  function cancelCommentPillHide() {
+    if (commentPillHideTimer) {
+      clearTimeout(commentPillHideTimer);
+      commentPillHideTimer = null;
+    }
+  }
+  function actualHideCommentHoverPill() {
+    commentPillHideTimer = null;
     if (!commentHoverPill) return;
     commentHoverPill.style.opacity = '0';
     commentHoverPill.style.pointerEvents = 'none';
     commentHoverTarget = null;
   }
+  function hideCommentHoverPill() {
+    cancelCommentPillHide();
+    actualHideCommentHoverPill();
+  }
+  function scheduleHideCommentHoverPill() {
+    cancelCommentPillHide();
+    commentPillHideTimer = setTimeout(actualHideCommentHoverPill, 180);
+  }
 
   function setupCommentHoverHandlers() {
     document.addEventListener('mouseover', function (ev) {
       if (commentModalEl && commentModalEl.style.display !== 'none') return;
-      // Don't show pill on the pill itself.
-      if (ev.target === commentHoverPill || (commentHoverPill && commentHoverPill.contains(ev.target))) return;
+      // Mouse is over the pill (or its child) — keep current target alive
+      // and cancel any pending hide so the click can land.
+      if (ev.target === commentHoverPill || (commentHoverPill && commentHoverPill.contains(ev.target))) {
+        cancelCommentPillHide();
+        return;
+      }
       var anchor = findCommentAnchor(ev.target);
       if (!anchor) return;
       // Don't trigger inside our own modal or other overlays.
       if (anchor.closest('[data-ve-overlay], .ve-comment-modal, [data-ve-snippet-popup]')) return;
+      cancelCommentPillHide();
       showCommentHoverPill(anchor);
     });
-    document.addEventListener('mouseleave', function () { hideCommentHoverPill(); }, true);
+    // mouseleave doesn't bubble; capture-phase + the deferred hide gives
+    // the pointer 180 ms to cross the 4 px gap onto the pill.
+    document.addEventListener('mouseleave', scheduleHideCommentHoverPill, true);
     // Hide on scroll (the pill is absolute-positioned so it would drift).
     window.addEventListener('scroll', hideCommentHoverPill, { passive: true });
   }
@@ -4696,6 +4726,18 @@
     anchor.setAttribute('data-ve-comment-active', '1');
     commentModalEl.style.display = 'flex';
     renderCommentModal();
+    // If the user closed the modal while an agent reply was still
+    // outstanding, the pending placeholder is now in storage but the
+    // poll loop was torn down on close. Restart it for the first
+    // pending turn so a reply that landed on disk while the modal
+    // was closed renders as soon as the modal reopens.
+    for (var i = 0; i < commentModalState.turns.length; i++) {
+      var pendingTurn = commentModalState.turns[i];
+      if (pendingTurn.role === 'agent' && pendingTurn.pending) {
+        pollForCommentReply(pendingTurn);
+        break;
+      }
+    }
     // Scroll the anchor into view if the reflow would push it off-screen.
     requestAnimationFrame(function () {
       anchor.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -4828,11 +4870,15 @@
       activeT.text = text;
       activeT.draft = false;
       activeT.at = Date.now();
-      saveThreadToStorage(commentModalState);
       // Insert a "pending" agent turn so the user sees something is happening.
       var pending = { turn: activeT.turn + 1, role: 'agent', text: '', at: null, pending: true };
       commentModalState.turns.push(pending);
       commentModalState.activeTurn = pending.turn;
+      // Persist BOTH the committed user turn AND the pending agent turn
+      // in one save. If the user refreshes between SEND and the reply
+      // arriving, the pending placeholder is restored on next open and
+      // openCommentModal restarts the poll loop for it.
+      saveThreadToStorage(commentModalState);
       renderCommentModal();
       postCommentAndPoll(activeT, pending);
       return;
