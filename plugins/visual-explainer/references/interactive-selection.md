@@ -354,6 +354,38 @@ The wrapper carries an extra 24 px outer padding (with a -12 px margin to keep d
 4. Click ◀ next to MAINTAINER again → entry removed, row de-highlighted; VIEWER + ADMIN remain.
 5. ESC → all entries cleared, every `[data-ve-pressed]` reset, dynamic column CSS sheet emptied.
 
+#### Phase 6 — code line-number gutter
+
+Every `<pre>` (anywhere in the page, not just inside `[data-ve-prose]`) is wrapped on init in a `.ve-code-block` flex container with a `.ve-code-gutter` to its left. The gutter contains one `<button class="ve-code-linenum" data-line="N">` per line. Pages opt out by stamping `[data-ve-no-gutter]` on the `<pre>`.
+
+| Action on a line number | Wire entry pushed |
+|-------------------------|---|
+| Single click on line N | `{kind:"codeline", block, line:N}` (toggle: re-clicking removes) |
+| Drag from line N to line M | `{kind:"codelines", block, fromLine:min, toLine:max}` (additive — re-dragging never deselects) |
+| Double-click on any line | `{kind:"codelines", block, fromLine:1, toLine:lineCount}` (whole block) |
+| Triple-click on any line | clears every `codeline` / `codelines` entry for this block |
+
+Click count detection uses a 350 ms idle window — same pattern as the prose multi-click chain. During a drag, the gutter line numbers under the cursor get `[data-ve-preview="1"]` so the in-progress range is visible before the user releases the mouse. Selected lines (after release or click) get `[data-ve-pressed="1"]`.
+
+`block` is the `<pre>`'s `data-ve-id` (auto-stamped if absent). Line numbers are 1-based and counted by splitting `pre.textContent` on `\n` (with a single trailing newline trimmed so the count matches what the user sees).
+
+```json
+{ "kind": "codeline",  "block": "ve-code-fib", "line": 4 }
+{ "kind": "codelines", "block": "ve-code-fib", "fromLine": 6, "toLine": 8 }
+```
+
+The Phase 3 in-text code grammar (token / line / block depths 1-3 inside `<pre>` inside `[data-ve-prose]`) still works — clicks on the code TEXT go to that handler; clicks on the gutter line numbers go here. The runtime element-toggle handler bails inside `[data-ve-prose]` and inside `.ve-regex` already, so the gutter doesn't need its own exclusion guard.
+
+**Out of scope** (deferred to a future tweak): the TRDD's "drag back over already-selected lines DESELECTS them" — within a single drag, reverse-motion currently keeps the line selected. The post-drag entry is always additive.
+
+ESC clears `kind:"codeline"` / `kind:"codelines"` along with every other entry — the global ESC handler calls `repaintCodeGutters()` after clearing `veSelection`, which iterates the now-empty array and removes every `[data-ve-pressed]`.
+
+**Verified empirically** (2026-05-06) against `tests_dev/code-gutter.html` (Fibonacci 10 lines + Quicksort 7 lines):
+1. Single click line 4 of fib → `codeline:4`. Pressed `[4]`.
+2. Drag line 6 → 8 of fib → `codelines:6-8`. Pressed `[4, 6, 7, 8]`.
+3. Double-click qs line 1 → `codelines:1-7` for qs. Pressed `[1..7]` in qs.
+4. Triple-click qs line 1 → all qs entries cleared. Fib entries untouched.
+
 **Timeout/error sentinels** (the runner emits these when no submission arrives or when something is structurally wrong) keep their old shape too: `{"id": null, "reason": "timeout|no-file|missing-file|no-browser|...", ...}`.
 
 ### Required follow-up
@@ -378,6 +410,8 @@ For per-entry kinds beyond `element`, branch a second time on the entry's own `k
 | `code` (depth 1-3)| "You picked **«text»** in the code block (`«language»`). What should I do with it?"                       |
 | `row`             | "You picked **row «row»** of table `«table»` (header «header»). What should I do with it?"                |
 | `column`          | "You picked **column «col»** of table `«table»` (header «header»). What should I do with it?"             |
+| `codeline`        | "You picked **line «line»** of code block `«block»`. What should I do with it?"                           |
+| `codelines`       | "You picked **lines «fromLine»–«toLine»** of code block `«block»`. What should I do with them?"           |
 | `regex-edit`      | "You changed the regex from `«original»` to `«edited»`. Want me to update the test cases / explanation / surrounding code?" |
 
 `regex-edit` is special — it represents a USER-AUTHORED MUTATION rather than a click on an existing element. The `original` and `edited` strings + the `ast` give the agent everything needed to act on the change without re-prompting.

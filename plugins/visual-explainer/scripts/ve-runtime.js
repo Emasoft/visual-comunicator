@@ -471,6 +471,36 @@
       'tr[data-ve-row-selected="1"] > td,',
       'tr[data-ve-row-selected="1"] > th {',
       '  background:color-mix(in srgb, var(--ve-accent, #b8861f) 18%, transparent) !important;',
+      '}',
+      // ─── Phase 6: code line-number gutter ─────────────────────────────
+      '.ve-code-block {',
+      '  display:flex; align-items:flex-start; gap:0;',
+      '  position:relative;',
+      '}',
+      '.ve-code-block > pre { margin:0; flex:1; min-width:0; }',
+      '.ve-code-gutter {',
+      '  display:flex; flex-direction:column;',
+      '  padding:6px 0; min-width:36px;',
+      '  background:color-mix(in srgb, var(--text, currentColor) 6%, transparent);',
+      '  border-right:1px solid color-mix(in srgb, var(--text, currentColor) 12%, transparent);',
+      '  font:600 12px/1.4 ui-monospace,Menlo,Consolas,monospace;',
+      '  color:color-mix(in srgb, var(--text, currentColor) 50%, transparent);',
+      '  user-select:none;',
+      '}',
+      '.ve-code-linenum {',
+      '  background:none; border:0; outline:0;',
+      '  cursor:pointer; padding:0 10px 0 8px;',
+      '  text-align:right; font:inherit; color:inherit;',
+      '  border-radius:3px;',
+      '  transition:background 100ms ease, color 100ms ease;',
+      '}',
+      '.ve-code-linenum:hover { background:color-mix(in srgb, var(--ve-accent, #b8861f) 18%, transparent); color:var(--ve-accent, #b8861f); }',
+      '.ve-code-linenum[data-ve-pressed="1"] {',
+      '  background:var(--ve-accent, #b8861f); color:var(--ve-sel-text, #14110b);',
+      '}',
+      '.ve-code-linenum[data-ve-preview="1"] {',
+      '  background:color-mix(in srgb, var(--ve-accent, #b8861f) 30%, transparent);',
+      '  color:var(--ve-sel-text, #14110b);',
       '}'
     ].join('\n');
     document.head.appendChild(s);
@@ -872,6 +902,8 @@
       // (the function reads veSelection — now empty — so every handle
       // resets to its default state and column CSS rules are emptied).
       if (typeof repaintTableHandles === 'function') repaintTableHandles();
+      // Phase 6: same idea for code-gutter pressed states.
+      if (typeof repaintCodeGutters === 'function') repaintCodeGutters();
       // Reset multi-click chain so the next click starts depth=1.
       lastClickChain = null;
       ev.preventDefault();
@@ -3808,6 +3840,238 @@
     for (var i = 0; i < tables.length; i++) initTableHandles(tables[i]);
   }
 
+  // ─────────────────────────────────────────────────────────────────────
+  // Phase 6 — code line-number gutter.
+  //
+  // Per TRDD-7a98 §3.7: every <pre><code> (or .ve-code) gets a left-side
+  // gutter with line numbers. The numbers are clickable and draggable:
+  //
+  //   1 click   = toggle a kind:'codeline' for that line (single line).
+  //   drag N→M  = push a kind:'codelines' for the inclusive interval.
+  //   2 clicks  = select all lines as one kind:'codelines'.
+  //   3 clicks  = clear every codeline / codelines for that block.
+  //
+  // Re-selecting an interval that overlaps existing lines ADDS — the
+  // accumulated entries can be reasoned about by the agent. The single
+  // exception is "drag back over already-selected lines deselects" —
+  // that within-drag deselect path is deferred (a future tweak).
+  //
+  // Pages opt out by stamping [data-ve-no-gutter] on the <pre>.
+  // ─────────────────────────────────────────────────────────────────────
+
+  var GUTTER_CHAIN_MS = 350;
+  var gutterClickChain = null;   // {blockId, line, count, timer, lineCount}
+  var gutterDragStart = null;    // {blockId, line, dragging, lineCount}
+
+  function gutterBlockId(pre) {
+    var existing = pre.getAttribute('data-ve-id');
+    if (existing) return existing;
+    var fresh = 've-code-' + Math.random().toString(36).slice(2, 8);
+    pre.setAttribute('data-ve-id', fresh);
+    return fresh;
+  }
+
+  function findCodeLineButton(target) {
+    if (!target || !target.closest) return null;
+    var btn = target.closest('.ve-code-linenum');
+    if (!btn) return null;
+    var line = parseInt(btn.getAttribute('data-line'), 10);
+    var gutter = btn.closest('.ve-code-gutter');
+    var blockId = gutter && gutter.getAttribute('data-ve-block-id');
+    var lineCount = gutter && parseInt(gutter.getAttribute('data-ve-line-count'), 10);
+    return { btn: btn, line: line, blockId: blockId, lineCount: lineCount };
+  }
+
+  function repaintCodeGutters() {
+    // Walk every line button and set [data-ve-pressed] based on whether
+    // the line is covered by any kind:'codeline' or kind:'codelines'
+    // entry for the same block.
+    var btns = document.querySelectorAll('.ve-code-linenum');
+    for (var i = 0; i < btns.length; i++) {
+      var btn = btns[i];
+      var line = parseInt(btn.getAttribute('data-line'), 10);
+      var gutter = btn.parentNode;
+      var blockId = gutter && gutter.getAttribute('data-ve-block-id');
+      var pressed = false;
+      for (var j = 0; j < veSelection.length; j++) {
+        var e = veSelection[j];
+        if (e.block !== blockId) continue;
+        if (e.kind === 'codeline' && e.line === line) { pressed = true; break; }
+        if (e.kind === 'codelines' && line >= e.fromLine && line <= e.toLine) { pressed = true; break; }
+      }
+      if (pressed) btn.setAttribute('data-ve-pressed', '1');
+      else btn.removeAttribute('data-ve-pressed');
+    }
+  }
+
+  function paintGutterPreview(blockId, fromLine, toLine) {
+    var lo = Math.min(fromLine, toLine), hi = Math.max(fromLine, toLine);
+    var btns = document.querySelectorAll('.ve-code-gutter[data-ve-block-id="' + blockId + '"] .ve-code-linenum');
+    for (var i = 0; i < btns.length; i++) {
+      var ln = parseInt(btns[i].getAttribute('data-line'), 10);
+      if (ln >= lo && ln <= hi) btns[i].setAttribute('data-ve-preview', '1');
+      else btns[i].removeAttribute('data-ve-preview');
+    }
+  }
+
+  function clearGutterPreview(blockId) {
+    var btns = document.querySelectorAll('.ve-code-gutter[data-ve-block-id="' + blockId + '"] .ve-code-linenum[data-ve-preview]');
+    for (var i = 0; i < btns.length; i++) btns[i].removeAttribute('data-ve-preview');
+  }
+
+  function pushSingleCodeLine(blockId, line) {
+    var entryId = 'codeline:' + blockId + ':' + line;
+    for (var i = 0; i < veSelection.length; i++) {
+      if (veSelection[i].entryId === entryId) {
+        // Toggle off
+        veSelection.splice(i, 1);
+        repaintCodeGutters();
+        updateSubmitButtonsState();
+        return;
+      }
+    }
+    veSelection.push({ kind: 'codeline', entryId: entryId, block: blockId, line: line });
+    repaintCodeGutters();
+    updateSubmitButtonsState();
+  }
+
+  function pushCodeLineRange(blockId, fromLine, toLine) {
+    var lo = Math.min(fromLine, toLine), hi = Math.max(fromLine, toLine);
+    if (lo === hi) { pushSingleCodeLine(blockId, lo); return; }
+    var entryId = 'codelines:' + blockId + ':' + lo + '-' + hi;
+    // Re-selecting an interval that overlaps existing lines ADDS — never
+    // deselects (TRDD §3.7). So no toggle here, just append.
+    for (var i = 0; i < veSelection.length; i++) {
+      if (veSelection[i].entryId === entryId) return; // exact dup — silently ignore
+    }
+    veSelection.push({
+      kind: 'codelines', entryId: entryId, block: blockId,
+      fromLine: lo, toLine: hi
+    });
+    repaintCodeGutters();
+    updateSubmitButtonsState();
+  }
+
+  function selectAllCodeLines(blockId, lineCount) {
+    if (!lineCount) return;
+    pushCodeLineRange(blockId, 1, lineCount);
+  }
+
+  function clearAllCodeLines(blockId) {
+    for (var i = veSelection.length - 1; i >= 0; i--) {
+      var e = veSelection[i];
+      if ((e.kind === 'codeline' || e.kind === 'codelines') && e.block === blockId) {
+        veSelection.splice(i, 1);
+      }
+    }
+    repaintCodeGutters();
+    updateSubmitButtonsState();
+  }
+
+  function setupGutterEvents() {
+    document.addEventListener('mousedown', function (ev) {
+      var hit = findCodeLineButton(ev.target);
+      if (!hit) return;
+      ev.preventDefault();
+      gutterDragStart = {
+        blockId: hit.blockId,
+        line: hit.line,
+        dragging: false,
+        lineCount: hit.lineCount
+      };
+    }, true);
+
+    document.addEventListener('mouseover', function (ev) {
+      if (!gutterDragStart) return;
+      var hit = findCodeLineButton(ev.target);
+      if (!hit || hit.blockId !== gutterDragStart.blockId) return;
+      if (hit.line !== gutterDragStart.line) gutterDragStart.dragging = true;
+      paintGutterPreview(gutterDragStart.blockId, gutterDragStart.line, hit.line);
+    }, true);
+
+    document.addEventListener('mouseup', function (ev) {
+      if (!gutterDragStart) return;
+      var snapshot = gutterDragStart;
+      gutterDragStart = null;
+      if (snapshot.dragging) {
+        var hit = findCodeLineButton(ev.target);
+        var endLine = hit && hit.blockId === snapshot.blockId ? hit.line : snapshot.line;
+        clearGutterPreview(snapshot.blockId);
+        pushCodeLineRange(snapshot.blockId, snapshot.line, endLine);
+        return;
+      }
+      // No drag — single line click. Feed the click chain so we can
+      // distinguish 1×, 2×, 3× clicks per the TRDD vocabulary.
+      handleGutterClickChain(snapshot.blockId, snapshot.line, snapshot.lineCount);
+    }, true);
+  }
+
+  function handleGutterClickChain(blockId, line, lineCount) {
+    if (!gutterClickChain
+        || gutterClickChain.blockId !== blockId
+        || gutterClickChain.line !== line) {
+      if (gutterClickChain && gutterClickChain.timer) clearTimeout(gutterClickChain.timer);
+      gutterClickChain = { blockId: blockId, line: line, count: 0, timer: null, lineCount: lineCount };
+    }
+    gutterClickChain.count++;
+    if (gutterClickChain.timer) clearTimeout(gutterClickChain.timer);
+    gutterClickChain.timer = setTimeout(function () {
+      var c = gutterClickChain;
+      gutterClickChain = null;
+      if (c.count === 1) pushSingleCodeLine(c.blockId, c.line);
+      else if (c.count === 2) selectAllCodeLines(c.blockId, c.lineCount);
+      else if (c.count >= 3) clearAllCodeLines(c.blockId);
+    }, GUTTER_CHAIN_MS);
+  }
+
+  function initCodeGutter(pre) {
+    if (pre.__veGutterInit) return;
+    if (pre.matches('[data-ve-no-gutter]')) return;
+    if (pre.closest('[data-ve-no-gutter]')) return;
+    if (pre.closest('.ve-regex')) return; // regex graph never gets a gutter
+    if (pre.closest('[data-ve-overlay], [data-ve-snippet-popup]')) return;
+    pre.__veGutterInit = true;
+    var blockId = gutterBlockId(pre);
+    var raw = pre.textContent || '';
+    // Trim trailing newline so the gutter line count matches what users see.
+    if (raw.length && raw.charAt(raw.length - 1) === '\n') raw = raw.slice(0, -1);
+    var lineCount = raw.split('\n').length;
+    if (lineCount === 0) return;
+
+    var wrapper = document.createElement('div');
+    wrapper.className = 've-code-block';
+    pre.parentNode.insertBefore(wrapper, pre);
+
+    var gutter = document.createElement('div');
+    gutter.className = 've-code-gutter';
+    gutter.setAttribute('data-ve-block-id', blockId);
+    gutter.setAttribute('data-ve-line-count', String(lineCount));
+
+    // Sync line-height: read the <pre>'s computed line-height so each
+    // gutter button lines up with the visual line of code beside it.
+    var styles = window.getComputedStyle(pre);
+    var lineHeight = styles.lineHeight;
+    if (lineHeight && lineHeight !== 'normal') gutter.style.lineHeight = lineHeight;
+
+    for (var i = 0; i < lineCount; i++) {
+      var num = document.createElement('button');
+      num.type = 'button';
+      num.className = 've-code-linenum';
+      num.setAttribute('data-line', String(i + 1));
+      num.textContent = String(i + 1);
+      if (lineHeight) num.style.lineHeight = lineHeight;
+      gutter.appendChild(num);
+    }
+
+    wrapper.appendChild(gutter);
+    wrapper.appendChild(pre);
+  }
+
+  function initAllCodeGutters() {
+    var pres = document.querySelectorAll('pre');
+    for (var i = 0; i < pres.length; i++) initCodeGutter(pres[i]);
+  }
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {
       injectStyles();
@@ -3819,6 +4083,8 @@
       enhanceFocus();
       initAllTableForms();
       initAllTableHandles();   // Phase 5
+      initAllCodeGutters();    // Phase 6
+      setupGutterEvents();     // Phase 6
       setupSnippetSelection();
       setupMultiClickSelection();
     });
@@ -3832,6 +4098,8 @@
     enhanceFocus();
     initAllTableForms();
     initAllTableHandles();
+    initAllCodeGutters();
+    setupGutterEvents();
     setupSnippetSelection();
   }
 })();
