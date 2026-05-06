@@ -59,6 +59,19 @@ from urllib.parse import urlparse
 # --user-data-dir, leaving the user staring at a blank-or-google-default
 # window.) The icon is a 1x1 transparent SVG embedded as a data URI so we
 # don't have to ship a binary file.
+def _ve_comment_queue_dir() -> str:
+    """Where comment queue + reply files live. The orchestrator slash
+    command and the runner agree on this location via either the env
+    var or the per-project default. Keeps it inside .ve-comments/ so
+    project gitignore can exclude the whole directory in one line."""
+    env = os.environ.get("VE_COMMENT_DIR")
+    if env:
+        return env
+    # Default: <cwd>/.ve-comments/. The runner's cwd is wherever the
+    # caller spawned it from — typically the project root.
+    return str(Path.cwd() / ".ve-comments")
+
+
 MANIFEST_BYTES = (
     b'{"name":"Visual Explainer Selection",'
     b'"short_name":"VE",'
@@ -323,12 +336,55 @@ def main(argv: list[str]) -> int:
         def do_OPTIONS(self):
             self.send_response(204)
             self.send_header("access-control-allow-origin", "*")
-            self.send_header("access-control-allow-methods", "POST, OPTIONS")
+            self.send_header("access-control-allow-methods", "GET, POST, OPTIONS")
             self.send_header("access-control-allow-headers", "content-type")
             self.end_headers()
 
         def do_GET(self):
             req_path = urlparse(self.path).path
+            # ── v2 — comment-thread reply polling ─────────────────────
+            # GET /__ve-reply/<threadId>?since=<turn> → 204 if no new
+            # turn beyond `since`, 200 with {turn, role:"agent", text}
+            # if the orchestrator wrote a reply file for this thread.
+            # Reply files live under <queue_dir>/<threadId>.reply.<turn>.json
+            # and are polled by the page every 1.5 s.
+            if req_path.startswith("/__ve-reply/"):
+                thread_id = req_path[len("/__ve-reply/"):]
+                qs = dict(p.split("=", 1) for p in (urlparse(self.path).query or "").split("&") if "=" in p)
+                since = int(qs.get("since", "0") or "0")
+                queue_dir = Path(_ve_comment_queue_dir())
+                # Look for reply files for turns > since.
+                candidates = sorted(
+                    queue_dir.glob(f"{thread_id}.reply.*.json"),
+                    key=lambda p: int(p.stem.rsplit(".", 1)[-1]) if p.stem.rsplit(".", 1)[-1].isdigit() else 0,
+                )
+                hit = None
+                for c in candidates:
+                    try:
+                        turn_n = int(c.stem.rsplit(".", 1)[-1])
+                    except Exception:
+                        continue
+                    if turn_n > since:
+                        try:
+                            hit = json.loads(c.read_text(encoding="utf-8"))
+                            hit.setdefault("turn", turn_n)
+                            hit.setdefault("role", "agent")
+                        except Exception:
+                            continue
+                        break
+                if hit is None:
+                    self.send_response(204)
+                    self.send_header("access-control-allow-origin", "*")
+                    self.end_headers()
+                    return
+                body = json.dumps(hit).encode("utf-8")
+                self.send_response(200)
+                self.send_header("content-type", "application/json")
+                self.send_header("access-control-allow-origin", "*")
+                self.send_header("content-length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             # Virtual route: serve the runtime even when the page lives in
             # a directory the agent forgot to mirror it into.
             if req_path == "/__ve/runtime.js":
@@ -375,6 +431,48 @@ def main(argv: list[str]) -> int:
 
         def do_POST(self):
             url = urlparse(self.path)
+            # ── v2 — comment-thread queue endpoint ────────────────────
+            # POST /__ve-comment {commentId, threadId, sourcePath, turn, text}
+            # appends the user turn to <queue_dir>/<threadId>.jsonl. The
+            # orchestrator (slash command) watches the queue, generates a
+            # per-turn reply, and writes <threadId>.reply.<turn+1>.json
+            # which the page picks up via /__ve-reply polling.
+            if url.path == "/__ve-comment":
+                length = int(self.headers.get("content-length") or 0)
+                raw = self.rfile.read(length) if length else b""
+                try:
+                    payload = json.loads(raw.decode("utf-8") or "{}")
+                except Exception:
+                    payload = {}
+                if not isinstance(payload, dict) or "threadId" not in payload:
+                    self.send_response(400)
+                    self.send_header("access-control-allow-origin", "*")
+                    self.end_headers()
+                    self.wfile.write(b'{"ok":false,"reason":"missing threadId"}')
+                    return
+                tid = str(payload.get("threadId"))
+                queue_dir = Path(_ve_comment_queue_dir())
+                queue_dir.mkdir(parents=True, exist_ok=True)
+                # Append-only JSONL — one line per user turn.
+                line = json.dumps({
+                    "commentId": payload.get("commentId"),
+                    "threadId": tid,
+                    "sourcePath": payload.get("sourcePath"),
+                    "turn": int(payload.get("turn") or 1),
+                    "role": "user",
+                    "text": payload.get("text") or "",
+                    "at": time.time(),
+                }) + "\n"
+                with (queue_dir / f"{tid}.jsonl").open("a", encoding="utf-8") as fh:
+                    fh.write(line)
+                resp = json.dumps({"ok": True, "threadId": tid, "queueDir": str(queue_dir)}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("content-type", "application/json")
+                self.send_header("access-control-allow-origin", "*")
+                self.send_header("content-length", str(len(resp)))
+                self.end_headers()
+                self.wfile.write(resp)
+                return
             if url.path != "/__ve-select":
                 self.send_response(404)
                 self.end_headers()

@@ -30,6 +30,7 @@ by default. Override with `--runtime-url`.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import json
 import re
@@ -210,6 +211,78 @@ def _inline(text: str) -> str:
     return out
 
 
+# ─────────────────────────────────────────────────────────────────────
+# v2 — hidden comment IDs.
+#
+# Every commentable element in the rendered HTML carries
+# data-ve-comment-id="<8-char-hex>". The id is a deterministic hash of
+# the element's normalised text (whitespace-collapsed, first 200 chars)
+# so it stays stable across re-renders. The renderer emits a sidecar
+# <report>.idmap.json mapping id → {kind, text, sectionId} that the
+# orchestrator consults when an unknown id arrives in a comment.
+# ─────────────────────────────────────────────────────────────────────
+
+
+_idmap: dict[str, dict] = {}
+_idmap_section_id: str = "preamble"
+
+
+def _normalise_for_hash(text: str) -> str:
+    return re.sub(r"\s+", " ", text or "").strip()[:200]
+
+
+def _comment_id(text: str) -> str:
+    norm = _normalise_for_hash(text)
+    if not norm:
+        return ""
+    h = hashlib.sha1(norm.encode("utf-8")).hexdigest()[:8]
+    return h
+
+
+def _stamp(open_tag: str, kind: str, raw_text: str) -> str:
+    """Insert data-ve-comment-id="..." into an opening tag string and
+    record the id → text mapping in the global idmap."""
+    cid = _comment_id(raw_text)
+    if not cid:
+        return open_tag
+    # Skip duplicate: if a section already mapped this exact text, just
+    # reuse the same id (idmap dedup by id).
+    if cid not in _idmap:
+        _idmap[cid] = {
+            "kind": kind,
+            "sectionId": _idmap_section_id,
+            "text": _normalise_for_hash(raw_text),
+        }
+    # Insert the attribute right before the closing >.
+    if open_tag.endswith(">"):
+        return open_tag[:-1] + f' data-ve-comment-id="{cid}">'
+    return open_tag
+
+
+def _set_section(section_id: str) -> None:
+    global _idmap_section_id
+    _idmap_section_id = section_id
+
+
+def _reset_idmap() -> None:
+    global _idmap, _idmap_section_id
+    _idmap = {}
+    _idmap_section_id = "preamble"
+
+
+TABLE_ROW_RE = re.compile(r"^\s*\|(.+)\|\s*$")
+TABLE_SEP_RE = re.compile(r"^\s*\|?\s*:?[-]+:?\s*(\|\s*:?[-]+:?\s*)+\|?\s*$")
+
+
+def _split_table_row(line: str) -> list[str]:
+    inner = line.strip()
+    if inner.startswith("|"):
+        inner = inner[1:]
+    if inner.endswith("|"):
+        inner = inner[:-1]
+    return [c.strip() for c in inner.split("|")]
+
+
 def md_to_html(md: str) -> str:
     if not md:
         return ""
@@ -221,8 +294,9 @@ def md_to_html(md: str) -> str:
     def flush_paragraph():
         if paragraph:
             joined = " ".join(_inline(line) for line in paragraph).strip()
+            raw_join = " ".join(paragraph).strip()
             if joined:
-                out.append(f"<p>{joined}</p>")
+                out.append(_stamp("<p>", "p", raw_join) + joined + "</p>")
             paragraph.clear()
 
     while i < len(lines):
@@ -239,15 +313,22 @@ def md_to_html(md: str) -> str:
                 i += 1
             i += 1
             cls = f' class="language-{lang}"' if lang else ""
+            raw_code = "\n".join(buf)
             out.append(
-                f"<pre><code{cls}>{html.escape(chr(10).join(buf))}</code></pre>"
+                _stamp("<pre>", "pre", raw_code)
+                + f"<code{cls}>{html.escape(raw_code)}</code></pre>"
             )
             continue
         m = HEADING_RE.match(line)
         if m:
             flush_paragraph()
             level = len(m.group(1))
-            out.append(f"<h{level}>{_inline(m.group(2))}</h{level}>")
+            heading_text = m.group(2)
+            out.append(
+                _stamp(f"<h{level}>", f"h{level}", heading_text)
+                + _inline(heading_text)
+                + f"</h{level}>"
+            )
             i += 1
             continue
         m = UL_RE.match(line)
@@ -258,7 +339,11 @@ def md_to_html(md: str) -> str:
                 mm = UL_RE.match(lines[i])
                 if not mm:
                     break
-                items.append(f"<li>{_inline(mm.group(1))}</li>")
+                items.append(
+                    _stamp("<li>", "li", mm.group(1))
+                    + _inline(mm.group(1))
+                    + "</li>"
+                )
                 i += 1
             out.append("<ul>" + "".join(items) + "</ul>")
             continue
@@ -270,7 +355,11 @@ def md_to_html(md: str) -> str:
                 mm = OL_RE.match(lines[i])
                 if not mm:
                     break
-                items.append(f"<li>{_inline(mm.group(2))}</li>")
+                items.append(
+                    _stamp("<li>", "li", mm.group(2))
+                    + _inline(mm.group(2))
+                    + "</li>"
+                )
                 i += 1
             out.append("<ol>" + "".join(items) + "</ol>")
             continue
@@ -286,7 +375,34 @@ def md_to_html(md: str) -> str:
                 buf2.append(mm.group(1))
                 i += 1
             inner = "<br>".join(_inline(b) for b in buf2)
-            out.append(f"<blockquote>{inner}</blockquote>")
+            raw_bq = " ".join(buf2)
+            out.append(_stamp("<blockquote>", "blockquote", raw_bq) + inner + "</blockquote>")
+            continue
+        # Pipe table — header row, separator row, body rows.
+        m = TABLE_ROW_RE.match(line)
+        if m and i + 1 < len(lines) and TABLE_SEP_RE.match(lines[i + 1]):
+            flush_paragraph()
+            header_cells = _split_table_row(line)
+            i += 2  # skip separator
+            body: list[list[str]] = []
+            while i < len(lines):
+                row_match = TABLE_ROW_RE.match(lines[i])
+                if not row_match:
+                    break
+                body.append(_split_table_row(lines[i]))
+                i += 1
+            tbl: list[str] = ["<table><thead><tr>"]
+            for cell in header_cells:
+                tbl.append(f"<th>{_inline(cell)}</th>")
+            tbl.append("</tr></thead><tbody>")
+            for row in body:
+                row_text = " | ".join(row)
+                tbl.append(_stamp("<tr>", "tr", row_text))
+                for cell in row:
+                    tbl.append(f"<td>{_inline(cell)}</td>")
+                tbl.append("</tr>")
+            tbl.append("</tbody></table>")
+            out.append("".join(tbl))
             continue
         if not line.strip():
             flush_paragraph()
@@ -422,10 +538,24 @@ def render_finding_html(f: Finding, prior_rounds: list[dict]) -> str:
     for k, v in f.meta.items():
         data_attrs.append(f'data-ve-finding-{html.escape(k)}="{html.escape(v)}"')
 
+    # v2: stamp the section header itself + the meta line so users can
+    # comment the heading or the metadata directly.
+    h2_open = _stamp("<h2>", "section-heading", f.title)
+    meta_text = " | ".join(
+        [sev] if sev else []
+    ) + (
+        " | " + f.meta["file"] if "file" in f.meta else ""
+    )
+    meta_open = _stamp(
+        '<div class="ve-finding-meta">',
+        "section-meta",
+        meta_text or f.title,
+    )
+
     return (
         f'<section {" ".join(data_attrs)}>\n'
-        f'  <h2>{html.escape(f.title)}</h2>\n'
-        f'  <div class="ve-finding-meta">{chip_html}{file_html}{"".join(meta_extra)}</div>\n'
+        f'  {h2_open}{html.escape(f.title)}</h2>\n'
+        f'  {meta_open}{chip_html}{file_html}{"".join(meta_extra)}</div>\n'
         f'  <div class="ve-finding-body">{md_to_html(f.body_md)}</div>\n'
         f'  <div class="ve-finding-thread">\n'
         f'    {"".join(rounds_html)}\n'
@@ -437,14 +567,19 @@ def render_finding_html(f: Finding, prior_rounds: list[dict]) -> str:
     )
 
 
-def render(report_md: str, replies: dict, *, title: str, runtime_url: str, mode: str = "finding") -> str:
+def render(report_md: str, replies: dict, *, title: str, runtime_url: str, mode: str = "finding") -> tuple[str, dict]:
+    """Returns (html_doc, idmap). idmap maps every commentId → metadata."""
+    _reset_idmap()
     rep = parse_report(report_md, mode=mode)
     prior = (replies or {}).get("findings", {})
 
     findings_blocks = []
+    _set_section("preamble")
     for f in rep.findings:
+        _set_section(f.findingId)
         rounds = prior.get(f.findingId, [])
         findings_blocks.append(render_finding_html(f, rounds))
+    _set_section("preamble")
 
     warning_block = ""
     if rep.warnings:
@@ -454,13 +589,14 @@ def render(report_md: str, replies: dict, *, title: str, runtime_url: str, mode:
         )
         warning_block = f"<div>{items}</div>"
 
-    return PAGE_TEMPLATE.format(
+    page = PAGE_TEMPLATE.format(
         title=html.escape(title),
         warning_block=warning_block,
         preamble_html=md_to_html(rep.preamble_md),
         findings_html="\n".join(findings_blocks),
         runtime_url=html.escape(runtime_url),
     )
+    return page, dict(_idmap)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -524,13 +660,21 @@ def main(argv: list[str] | None = None) -> int:
             title = report_path.stem
 
     out_path = Path(args.out) if args.out else report_path.with_suffix(".html")
-    html_doc = render(
+    html_doc, idmap = render(
         report_md, replies,
         title=title,
         runtime_url=args.runtime_url,
         mode=args.mode,
     )
     out_path.write_text(html_doc, encoding="utf-8")
+    # v2: write the idmap sidecar so the orchestrator can dereference
+    # commentIds. Path is alongside the report (NOT the html) so the
+    # mapping survives re-renders to different output locations.
+    idmap_path = report_path.with_suffix(".idmap.json")
+    idmap_path.write_text(
+        json.dumps({"sourcePath": str(report_path), "ids": idmap}, indent=2),
+        encoding="utf-8",
+    )
     print(out_path)
     return 0
 

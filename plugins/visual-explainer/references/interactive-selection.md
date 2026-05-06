@@ -453,6 +453,60 @@ The orchestrator (the slash command `/visual-explainer:interactive-report`) read
 6. Clearing the textarea (whitespace-only) removed the entry (count returned to 0).
 7. Adding a finding-3 reply alongside finding-1 → 2 entries, submit count `(2)`.
 
+#### Interactive agent reports v2 — modal comment threads (TRDD-eff1aa87 §6)
+
+The renderer (`render-interactive-report.py`) now stamps every `<p>`, `<li>`, `<tr>`, `<pre>`, section heading, and finding-meta with a stable `data-ve-comment-id="<8-char-hex>"`. The id is a sha-1 of the element's normalised text (whitespace-collapsed, first 200 chars), so the same paragraph in the same report always gets the same id across re-renders. The renderer also writes a sidecar **`<report>.idmap.json`** mapping every id → `{kind, sectionId, text}` — Claude's `/visual-explainer:respond-to-comment` slash command consults this when an unknown id arrives, so the doc only needs to be re-read once per session.
+
+On hover of any commentable element, the runtime injects a "💬 Comment this" pill in the top-right corner. Click → modal opens on the right of the viewport (460 px wide), the page reflows so the modal never overlaps text (`body[data-ve-comment-modal-open="1"] main { margin-right: 480px; pointer-events: none }`), and the active anchor gets a gold outline ring.
+
+Modal layout matches the user's sketch:
+
+```
+----------------------------------------
+|  thread  |                           |
+|----------|                           |
+| 1:  user |                           |
+| 2: agent |  (text of the active      |
+|>3:  user<|   turn; becomes an input  |
+|          |   box when active is the  |
+|          |   next-to-compose user    |
+|          |   draft)                  |
+|--------------------------------------|
+|    [ANSWER]           [DONE]         |
+----------------------------------------
+```
+
+- Left column: clickable thread index, one row per turn, `> N: role <` markers on the active turn.
+- Right column: the active turn's text or, if it's a draft user turn, an editable textarea.
+- ANSWER: when active is a draft user turn → submit it (POST `/__ve-comment`, page polls `/__ve-reply/<threadId>` every 1.5 s, the agent's reply lands in the SAME box without page reload). When active is any past turn → append a new user-draft at the bottom of the thread, focus its textarea.
+- DONE: save thread to localStorage and close the modal. ESC also closes.
+
+Wire format — POST body to `/__ve-comment`:
+```json
+{ "commentId": "7e82b077",
+  "threadId":  "thread-7e82b077-mou200pw",
+  "sourcePath":"/path/to/report.md",
+  "turn": 1,
+  "text": "Why polling instead of SSE?" }
+```
+
+Reply file the orchestrator writes (`<queue-dir>/<threadId>.reply.<turn>.json`):
+```json
+{ "turn": 2, "role": "agent", "text": "Polling fits the runner architecture: …" }
+```
+
+Thread state is persisted to `localStorage[ 've-comment-thread:'+commentId ]` so a page reload preserves the full history.
+
+**Verified empirically** (2026-05-06) against the symphony-vs-amoa comparison report (570 lines, 11 H2 sections, 139 commentable elements) served by a v2-aware Python http server:
+1. Hover on a `<p data-ve-comment-id="7e82b077">` → pill rendered, opacity 0.7+.
+2. Click pill → modal opens with title `Comment · #7e82b077`, page reflows, anchor gets gold ring, draft turn 1 visible with focused textarea.
+3. Type reply, click ANSWER → POST landed in queue; thread now `[1: user, > 2: agent <]` with "Waiting for Claude to reply…" placeholder.
+4. Wrote a fake reply file → page polled, picked it up within 2 s, replaced the pending turn with Claude's text inline. Active turn = 2 (agent).
+5. Click ANSWER → new draft turn 3 appended, textarea focused. Thread index shows `[1: user, 2: agent, > 3: user <]`.
+6. Click row 1 in the index → right pane switches to original user comment text. Click row 2 → switches to Claude reply. Click row 3 → back to draft textarea.
+7. ESC → modal closes, page restored, anchor un-ringed.
+8. Re-hover same paragraph + click pill → modal reopens with full thread history (3 turns) restored from localStorage.
+
 **Timeout/error sentinels** (the runner emits these when no submission arrives or when something is structurally wrong) keep their old shape too: `{"id": null, "reason": "timeout|no-file|missing-file|no-browser|...", ...}`.
 
 ### Required follow-up

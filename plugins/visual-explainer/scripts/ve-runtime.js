@@ -573,6 +573,149 @@
       '}',
       '.ve-finding-reply::placeholder {',
       '  color:color-mix(in srgb, var(--text, currentColor) 42%, transparent);',
+      '}',
+      // ─── v2 — modal comment threads (TRDD-eff1aa87 §6) ────────────────
+      // Hover pill shown over the focused commentable element.
+      '.ve-comment-pill {',
+      '  position:absolute; z-index:2147483647;',
+      '  background:var(--ve-accent, #b8861f); color:var(--ve-sel-text, #14110b);',
+      '  border:0; border-radius:999px;',
+      '  padding:4px 12px; font:600 11px/1.4 ui-sans-serif,system-ui,sans-serif;',
+      '  letter-spacing:0.02em; cursor:pointer;',
+      '  box-shadow:0 4px 14px rgba(0,0,0,0.28);',
+      '  opacity:0; pointer-events:none;',
+      '  transition:opacity 120ms ease;',
+      '}',
+      '.ve-comment-pill:hover { filter: brightness(1.08); }',
+      // Active commentable element gets a gold ring while modal is open.
+      '[data-ve-comment-active] {',
+      '  outline:2px solid var(--ve-accent, #b8861f);',
+      '  outline-offset:4px; border-radius:4px;',
+      '  background:color-mix(in srgb, var(--ve-accent, #b8861f) 8%, transparent);',
+      '}',
+      // Page reflow when modal open.
+      'body[data-ve-comment-modal-open="1"] { overflow-x:hidden; }',
+      'body[data-ve-comment-modal-open="1"] main {',
+      '  margin-right:480px; transition: margin 240ms ease;',
+      '}',
+      'body[data-ve-comment-modal-open="1"] main * {',
+      '  pointer-events:none;', // page becomes inert
+      '}',
+      'body[data-ve-comment-modal-open="1"] main [data-ve-comment-active] {',
+      '  pointer-events:auto;', // but the active anchor stays selectable
+      '}',
+      // Modal box.
+      '.ve-comment-modal {',
+      '  position:fixed; top:0; right:0; width:460px; height:100vh;',
+      '  z-index:2147483646;',
+      '  display:flex; flex-direction:column;',
+      '  background:var(--bg, #faf6ee); color:var(--text, #1f1a14);',
+      '  border-left:1px solid color-mix(in srgb, var(--ve-accent, #b8861f) 40%, transparent);',
+      '  box-shadow:-12px 0 28px rgba(0,0,0,0.18);',
+      '  font:14px/1.5 ui-sans-serif,system-ui,-apple-system,sans-serif;',
+      '  animation:veFadeIn 160ms ease-out both;',
+      '}',
+      '.ve-comment-modal-inner {',
+      '  display:flex; flex-direction:column; flex:1; min-height:0;',
+      '}',
+      '.ve-comment-modal-header {',
+      '  display:flex; align-items:center; justify-content:space-between;',
+      '  padding:12px 16px;',
+      '  border-bottom:1px solid color-mix(in srgb, var(--text, currentColor) 12%, transparent);',
+      '  background:color-mix(in srgb, var(--ve-accent, #b8861f) 8%, transparent);',
+      '}',
+      '.ve-comment-modal-title {',
+      '  font:600 13px/1.4 ui-monospace,Menlo,monospace;',
+      '  letter-spacing:0.04em; opacity:0.85;',
+      '}',
+      '.ve-comment-modal-close {',
+      '  background:transparent; border:0; color:inherit;',
+      '  font:300 22px/1 ui-sans-serif,sans-serif; cursor:pointer;',
+      '  padding:0 4px; opacity:0.6;',
+      '}',
+      '.ve-comment-modal-close:hover { opacity:1; }',
+      '.ve-comment-modal-body {',
+      '  display:flex; flex:1; min-height:0;',
+      '}',
+      '.ve-comment-thread-index {',
+      '  width:120px; min-width:120px;',
+      '  margin:0; padding:8px 0; list-style:none;',
+      '  border-right:1px solid color-mix(in srgb, var(--text, currentColor) 12%, transparent);',
+      '  overflow-y:auto;',
+      '  font:13px/1.4 ui-monospace,Menlo,monospace;',
+      '}',
+      '.ve-comment-thread-row {',
+      '  padding:6px 12px; cursor:pointer;',
+      '  white-space:pre;',
+      '  border-left:2px solid transparent;',
+      '  transition:background 100ms ease, border-color 100ms ease;',
+      '}',
+      '.ve-comment-thread-row:hover {',
+      '  background:color-mix(in srgb, var(--ve-accent, #b8861f) 10%, transparent);',
+      '}',
+      '.ve-comment-thread-row[data-active] {',
+      '  background:color-mix(in srgb, var(--ve-accent, #b8861f) 22%, transparent);',
+      '  border-left-color:var(--ve-accent, #b8861f);',
+      '  font-weight:600;',
+      '}',
+      '.ve-comment-thread-row[data-role="agent"] { color:color-mix(in srgb, var(--text, currentColor) 80%, transparent); }',
+      '.ve-comment-active-pane {',
+      '  flex:1; min-width:0; display:flex; flex-direction:column;',
+      '  padding:14px 18px; overflow-y:auto;',
+      '}',
+      '.ve-comment-active-meta {',
+      '  font:600 11px/1.4 ui-monospace,Menlo,monospace;',
+      '  letter-spacing:0.06em; opacity:0.55; margin-bottom:8px;',
+      '  text-transform:uppercase;',
+      '}',
+      '.ve-comment-active-content {',
+      '  flex:1; display:flex; flex-direction:column; min-height:0;',
+      '}',
+      '.ve-comment-active-text {',
+      '  white-space:pre-wrap; word-wrap:break-word;',
+      '  padding:10px 12px; border-radius:6px;',
+      '  background:color-mix(in srgb, var(--text, currentColor) 5%, transparent);',
+      '  border:1px solid color-mix(in srgb, var(--text, currentColor) 12%, transparent);',
+      '}',
+      '.ve-comment-active-textarea {',
+      '  flex:1; box-sizing:border-box; resize:none; min-height:120px;',
+      '  padding:10px 12px; border-radius:6px;',
+      '  border:1px solid color-mix(in srgb, var(--text, currentColor) 22%, transparent);',
+      '  background:transparent; color:inherit;',
+      '  font:14px/1.55 inherit;',
+      '}',
+      '.ve-comment-active-textarea:focus {',
+      '  outline:none;',
+      '  border-color:var(--ve-accent, #b8861f);',
+      '  box-shadow:0 0 0 2px color-mix(in srgb, var(--ve-accent, #b8861f) 28%, transparent);',
+      '}',
+      '.ve-comment-active-textarea::placeholder {',
+      '  color:color-mix(in srgb, var(--text, currentColor) 42%, transparent);',
+      '}',
+      '.ve-comment-pending {',
+      '  font:italic 13px/1.5 inherit; opacity:0.65; padding:10px 0;',
+      '}',
+      '.ve-comment-modal-footer {',
+      '  display:flex; gap:10px; justify-content:flex-end;',
+      '  padding:12px 18px;',
+      '  border-top:1px solid color-mix(in srgb, var(--text, currentColor) 12%, transparent);',
+      '  background:color-mix(in srgb, var(--text, currentColor) 4%, transparent);',
+      '}',
+      '.ve-comment-answer, .ve-comment-done {',
+      '  padding:8px 18px; border-radius:6px; cursor:pointer;',
+      '  border:1px solid color-mix(in srgb, var(--text, currentColor) 24%, transparent);',
+      '  background:transparent; color:inherit;',
+      '  font:600 13px/1.2 ui-sans-serif,system-ui,sans-serif;',
+      '  letter-spacing:0.04em; text-transform:uppercase;',
+      '  transition:background 120ms, color 120ms;',
+      '}',
+      '.ve-comment-answer:hover:not(:disabled) {',
+      '  background:var(--ve-accent, #b8861f); color:var(--ve-sel-text, #14110b);',
+      '  border-color:var(--ve-accent, #b8861f);',
+      '}',
+      '.ve-comment-answer:disabled { opacity:0.45; cursor:not-allowed; }',
+      '.ve-comment-done:hover {',
+      '  background:color-mix(in srgb, var(--text, currentColor) 14%, transparent);',
       '}'
     ].join('\n');
     document.head.appendChild(s);
@@ -4330,6 +4473,410 @@
     findingReplyTimers = {};
   }
 
+  // ─────────────────────────────────────────────────────────────────────
+  // v2 — modal comment threads (TRDD-eff1aa87 §6).
+  //
+  // Hover any [data-ve-comment-id] → "💬 Comment this" pill in the
+  // top-right of the element. Click the pill → modal slides in from
+  // the right; main content reflows so the modal never overlaps text.
+  //
+  // Inside the modal: left thread index + right active-turn pane +
+  // bottom ANSWER / DONE buttons. Clicking a thread row displays that
+  // turn's content in the right pane (read-only). Pressing ANSWER
+  // appends a new user-turn entry at the bottom of the index, focuses
+  // the right-pane textarea. SEND-on-ANSWER posts the comment to
+  // /__ve-comment, then the page polls /__ve-reply/<threadId> every
+  // 1.5 s for the agent's reply, which lands as a new agent-turn at
+  // the bottom of the index. DONE saves and closes.
+  //
+  // Thread state lives in localStorage so a reload preserves history.
+  // ─────────────────────────────────────────────────────────────────────
+
+  var COMMENT_POLL_MS = 1500;
+  var COMMENT_LS_PREFIX = 've-comment-thread:';
+  var commentModalEl = null;
+  var commentModalState = null; // {commentId, threadId, anchorEl, turns:[], activeTurn:N, polling:boolean, pollHandle:any}
+
+  function commentSourcePath() {
+    // The original source markdown path is recorded in the page's
+    // <meta name="ve-source-path"> if the renderer stamped it; otherwise
+    // we fall back to location.pathname so the orchestrator can still
+    // map a thread to a doc on disk.
+    var meta = document.querySelector('meta[name="ve-source-path"]');
+    if (meta && meta.content) return meta.content;
+    return location.pathname || '';
+  }
+
+  function ensureThreadId(commentId) {
+    return 'thread-' + commentId + '-' + Date.now().toString(36);
+  }
+
+  function loadThreadFromStorage(commentId) {
+    try {
+      var raw = localStorage.getItem(COMMENT_LS_PREFIX + commentId);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (_) { return null; }
+  }
+
+  function saveThreadToStorage(state) {
+    try {
+      localStorage.setItem(
+        COMMENT_LS_PREFIX + state.commentId,
+        JSON.stringify({
+          commentId: state.commentId,
+          threadId: state.threadId,
+          turns: state.turns,
+          updatedAt: Date.now()
+        })
+      );
+    } catch (_) {}
+  }
+
+  function findCommentAnchor(target) {
+    if (!target || !target.closest) return null;
+    return target.closest('[data-ve-comment-id]');
+  }
+
+  // ── Hover affordance ────────────────────────────────────────────────
+  var commentHoverPill = null;
+  var commentHoverTarget = null;
+
+  function showCommentHoverPill(el) {
+    if (!el) return;
+    if (commentHoverTarget === el) return;
+    commentHoverTarget = el;
+    if (!commentHoverPill) {
+      commentHoverPill = document.createElement('button');
+      commentHoverPill.type = 'button';
+      commentHoverPill.className = 've-comment-pill';
+      commentHoverPill.setAttribute('data-ve-overlay', '1');
+      commentHoverPill.textContent = '💬 Comment this';
+      commentHoverPill.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (commentHoverTarget) openCommentModal(commentHoverTarget);
+      });
+      document.body.appendChild(commentHoverPill);
+    }
+    var rect = el.getBoundingClientRect();
+    commentHoverPill.style.top = (rect.top + window.scrollY + 4) + 'px';
+    commentHoverPill.style.left = (rect.right + window.scrollX - 130) + 'px';
+    commentHoverPill.style.opacity = '1';
+    commentHoverPill.style.pointerEvents = 'auto';
+  }
+
+  function hideCommentHoverPill() {
+    if (!commentHoverPill) return;
+    commentHoverPill.style.opacity = '0';
+    commentHoverPill.style.pointerEvents = 'none';
+    commentHoverTarget = null;
+  }
+
+  function setupCommentHoverHandlers() {
+    document.addEventListener('mouseover', function (ev) {
+      if (commentModalEl && commentModalEl.style.display !== 'none') return;
+      // Don't show pill on the pill itself.
+      if (ev.target === commentHoverPill || (commentHoverPill && commentHoverPill.contains(ev.target))) return;
+      var anchor = findCommentAnchor(ev.target);
+      if (!anchor) return;
+      // Don't trigger inside our own modal or other overlays.
+      if (anchor.closest('[data-ve-overlay], .ve-comment-modal, [data-ve-snippet-popup]')) return;
+      showCommentHoverPill(anchor);
+    });
+    document.addEventListener('mouseleave', function () { hideCommentHoverPill(); }, true);
+    // Hide on scroll (the pill is absolute-positioned so it would drift).
+    window.addEventListener('scroll', hideCommentHoverPill, { passive: true });
+  }
+
+  // ── Modal ───────────────────────────────────────────────────────────
+  function buildCommentModal() {
+    var m = document.createElement('div');
+    m.className = 've-comment-modal';
+    m.setAttribute('data-ve-overlay', '1');
+    m.style.display = 'none';
+    m.innerHTML = ''
+      + '<div class="ve-comment-modal-inner">'
+      + '  <div class="ve-comment-modal-header">'
+      + '    <span class="ve-comment-modal-title">Comment thread</span>'
+      + '    <button type="button" class="ve-comment-modal-close" aria-label="Close">×</button>'
+      + '  </div>'
+      + '  <div class="ve-comment-modal-body">'
+      + '    <ul class="ve-comment-thread-index"></ul>'
+      + '    <div class="ve-comment-active-pane">'
+      + '      <div class="ve-comment-active-meta"></div>'
+      + '      <div class="ve-comment-active-content"></div>'
+      + '    </div>'
+      + '  </div>'
+      + '  <div class="ve-comment-modal-footer">'
+      + '    <button type="button" class="ve-comment-answer">ANSWER</button>'
+      + '    <button type="button" class="ve-comment-done">DONE</button>'
+      + '  </div>'
+      + '</div>';
+    document.body.appendChild(m);
+    m.querySelector('.ve-comment-modal-close').addEventListener('click', closeCommentModal);
+    m.querySelector('.ve-comment-done').addEventListener('click', closeCommentModal);
+    m.querySelector('.ve-comment-answer').addEventListener('click', handleAnswerButton);
+    return m;
+  }
+
+  function openCommentModal(anchor) {
+    hideCommentHoverPill();
+    if (!commentModalEl) commentModalEl = buildCommentModal();
+    var commentId = anchor.getAttribute('data-ve-comment-id');
+    if (!commentId) return;
+    // Restore thread from storage if present, else start a fresh one.
+    var stored = loadThreadFromStorage(commentId);
+    var turns;
+    var threadId;
+    if (stored) {
+      turns = stored.turns || [];
+      threadId = stored.threadId;
+    } else {
+      turns = [];
+      threadId = ensureThreadId(commentId);
+    }
+    commentModalState = {
+      commentId: commentId,
+      threadId: threadId,
+      anchorEl: anchor,
+      turns: turns,
+      activeTurn: turns.length > 0 ? turns.length : 1, // last turn or first new
+      polling: false,
+      pollHandle: null,
+      lastSeen: turns.length
+    };
+    if (turns.length === 0) {
+      // Fresh thread — pre-create an empty user turn so the right pane
+      // is editable from the start.
+      commentModalState.turns.push({ turn: 1, role: 'user', text: '', at: null, draft: true });
+      commentModalState.activeTurn = 1;
+    }
+    document.body.setAttribute('data-ve-comment-modal-open', '1');
+    anchor.setAttribute('data-ve-comment-active', '1');
+    commentModalEl.style.display = 'flex';
+    renderCommentModal();
+    // Scroll the anchor into view if the reflow would push it off-screen.
+    requestAnimationFrame(function () {
+      anchor.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+  }
+
+  function closeCommentModal() {
+    if (!commentModalState) return;
+    saveCurrentDraftIfPresent();
+    saveThreadToStorage(commentModalState);
+    if (commentModalState.pollHandle) {
+      clearTimeout(commentModalState.pollHandle);
+      commentModalState.pollHandle = null;
+    }
+    if (commentModalState.anchorEl) commentModalState.anchorEl.removeAttribute('data-ve-comment-active');
+    commentModalState = null;
+    document.body.removeAttribute('data-ve-comment-modal-open');
+    if (commentModalEl) commentModalEl.style.display = 'none';
+  }
+
+  function renderCommentModal() {
+    if (!commentModalEl || !commentModalState) return;
+    var index = commentModalEl.querySelector('.ve-comment-thread-index');
+    var active = commentModalEl.querySelector('.ve-comment-active-content');
+    var meta = commentModalEl.querySelector('.ve-comment-active-meta');
+    var title = commentModalEl.querySelector('.ve-comment-modal-title');
+    title.textContent = 'Comment · #' + commentModalState.commentId;
+
+    // Index — one row per turn.
+    index.innerHTML = '';
+    commentModalState.turns.forEach(function (t) {
+      var li = document.createElement('li');
+      li.className = 've-comment-thread-row';
+      li.setAttribute('data-turn', String(t.turn));
+      li.setAttribute('data-role', t.role);
+      var label = (commentModalState.activeTurn === t.turn ? '> ' : '   ')
+                + t.turn + ': ' + t.role
+                + (commentModalState.activeTurn === t.turn ? ' <' : '');
+      li.textContent = label;
+      if (commentModalState.activeTurn === t.turn) li.setAttribute('data-active', '1');
+      li.addEventListener('click', function () {
+        saveCurrentDraftIfPresent();
+        commentModalState.activeTurn = t.turn;
+        renderCommentModal();
+      });
+      index.appendChild(li);
+    });
+
+    // Auto-scroll the index so the active row is visible.
+    var activeRow = index.querySelector('[data-active]');
+    if (activeRow) activeRow.scrollIntoView({ block: 'nearest' });
+
+    // Active pane.
+    var activeT = commentModalState.turns.find(function (t) { return t.turn === commentModalState.activeTurn; });
+    if (!activeT) {
+      active.innerHTML = '';
+      meta.textContent = '';
+      return;
+    }
+    meta.textContent = (activeT.role === 'user' ? 'YOU' : 'CLAUDE')
+      + ' · turn ' + activeT.turn
+      + (activeT.at ? ' · ' + new Date(activeT.at).toLocaleTimeString() : '');
+    if (activeT.role === 'user' && activeT.draft) {
+      active.innerHTML = '';
+      var ta = document.createElement('textarea');
+      ta.className = 've-comment-active-textarea';
+      ta.placeholder = 'Write your comment here…';
+      ta.value = activeT.text || '';
+      ta.addEventListener('input', function () {
+        activeT.text = ta.value;
+        // Re-evaluate ANSWER's enabled state on each keystroke so the
+        // button enables/disables in lockstep with the user's typing.
+        updateAnswerButtonState();
+      });
+      active.appendChild(ta);
+      // Focus + put cursor at the end.
+      requestAnimationFrame(function () {
+        ta.focus();
+        ta.selectionStart = ta.selectionEnd = ta.value.length;
+      });
+    } else if (activeT.role === 'agent' && activeT.pending) {
+      active.innerHTML = '<div class="ve-comment-pending">Waiting for Claude to reply…</div>';
+    } else {
+      active.innerHTML = '';
+      var pre = document.createElement('div');
+      pre.className = 've-comment-active-text';
+      pre.textContent = activeT.text || '';
+      active.appendChild(pre);
+    }
+    updateAnswerButtonState();
+  }
+
+  function updateAnswerButtonState() {
+    if (!commentModalEl || !commentModalState) return;
+    var btn = commentModalEl.querySelector('.ve-comment-answer');
+    var activeT = commentModalState.turns.find(function (t) { return t.turn === commentModalState.activeTurn; });
+    // ANSWER does TWO things depending on context:
+    //   1) Active turn is a user-draft with text → submit it (POST + poll for reply).
+    //   2) Active turn is an agent reply (or any past turn) → start a new user turn at the bottom.
+    if (!activeT) { btn.disabled = true; return; }
+    if (activeT.role === 'user' && activeT.draft) {
+      btn.disabled = !(activeT.text || '').trim();
+      btn.textContent = 'ANSWER';
+    } else if (activeT.role === 'agent' && activeT.pending) {
+      btn.disabled = true;
+      btn.textContent = '…waiting…';
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'ANSWER';
+    }
+  }
+
+  function saveCurrentDraftIfPresent() {
+    if (!commentModalState) return;
+    var ta = commentModalEl && commentModalEl.querySelector('.ve-comment-active-textarea');
+    if (!ta) return;
+    var activeT = commentModalState.turns.find(function (t) { return t.turn === commentModalState.activeTurn; });
+    if (activeT && activeT.draft) activeT.text = ta.value;
+  }
+
+  function handleAnswerButton() {
+    if (!commentModalState) return;
+    saveCurrentDraftIfPresent();
+    var activeT = commentModalState.turns.find(function (t) { return t.turn === commentModalState.activeTurn; });
+    if (!activeT) return;
+    if (activeT.role === 'user' && activeT.draft) {
+      // SEND case: post the comment, then poll for the reply.
+      var text = (activeT.text || '').trim();
+      if (!text) return;
+      activeT.text = text;
+      activeT.draft = false;
+      activeT.at = Date.now();
+      saveThreadToStorage(commentModalState);
+      // Insert a "pending" agent turn so the user sees something is happening.
+      var pending = { turn: activeT.turn + 1, role: 'agent', text: '', at: null, pending: true };
+      commentModalState.turns.push(pending);
+      commentModalState.activeTurn = pending.turn;
+      renderCommentModal();
+      postCommentAndPoll(activeT, pending);
+      return;
+    }
+    // ELSE: append a brand-new user-draft turn at the bottom.
+    var nextTurn = (commentModalState.turns[commentModalState.turns.length - 1].turn) + 1;
+    var draft = { turn: nextTurn, role: 'user', text: '', at: null, draft: true };
+    commentModalState.turns.push(draft);
+    commentModalState.activeTurn = nextTurn;
+    saveThreadToStorage(commentModalState);
+    renderCommentModal();
+  }
+
+  function postCommentAndPoll(userTurn, pendingAgentTurn) {
+    var payload = {
+      commentId: commentModalState.commentId,
+      threadId: commentModalState.threadId,
+      sourcePath: commentSourcePath(),
+      turn: userTurn.turn,
+      text: userTurn.text
+    };
+    fetch('/__ve-comment', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).catch(function (e) {
+      console.warn('[ve-comment] POST failed:', e);
+    }).then(function () {
+      pollForCommentReply(pendingAgentTurn);
+    });
+  }
+
+  function pollForCommentReply(pendingAgentTurn) {
+    if (!commentModalState) return;
+    function once() {
+      var url = '/__ve-reply/' + encodeURIComponent(commentModalState.threadId)
+        + '?since=' + (pendingAgentTurn.turn - 1);
+      fetch(url, { headers: { 'accept': 'application/json' } })
+        .then(function (r) {
+          if (r.status === 204) {
+            schedule();
+            return null;
+          }
+          if (!r.ok) {
+            console.warn('[ve-comment] poll error', r.status);
+            schedule();
+            return null;
+          }
+          return r.json();
+        })
+        .then(function (data) {
+          if (!data) return;
+          // Expect {turn, role:"agent", text}. Replace the pending entry.
+          var idx = commentModalState.turns.indexOf(pendingAgentTurn);
+          if (idx < 0) return;
+          commentModalState.turns[idx] = {
+            turn: data.turn || pendingAgentTurn.turn,
+            role: 'agent',
+            text: data.text || '',
+            at: Date.now()
+          };
+          commentModalState.activeTurn = commentModalState.turns[idx].turn;
+          saveThreadToStorage(commentModalState);
+          renderCommentModal();
+        })
+        .catch(function () { schedule(); });
+    }
+    function schedule() {
+      if (!commentModalState) return;
+      commentModalState.pollHandle = setTimeout(once, COMMENT_POLL_MS);
+    }
+    once();
+  }
+
+  function setupCommentModal() {
+    setupCommentHoverHandlers();
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape' && commentModalState) {
+        ev.preventDefault();
+        closeCommentModal();
+      }
+    });
+  }
+
   function bootEverything() {
     injectStyles();
     isTouchDevice(); // Phase 7: stamp body[data-ve-touch="1"] early so the
@@ -4347,7 +4894,8 @@
     setupGutterEvents();     // Phase 6 + Phase 7 (touch)
     setupSnippetSelection(); // Phase 4 + Phase 7 (touchend)
     setupMultiClickSelection();
-    setupFindingReplyHandlers(); // TRDD-eff1aa87 — interactive reports
+    setupFindingReplyHandlers(); // TRDD-eff1aa87 v1 — interactive reports
+    setupCommentModal();         // TRDD-eff1aa87 v2 — modal comment threads
   }
 
   if (document.readyState === 'loading') {
