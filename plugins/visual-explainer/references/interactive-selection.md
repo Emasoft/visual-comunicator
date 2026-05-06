@@ -386,6 +386,41 @@ ESC clears `kind:"codeline"` / `kind:"codelines"` along with every other entry �
 3. Double-click qs line 1 → `codelines:1-7` for qs. Pressed `[1..7]` in qs.
 4. Triple-click qs line 1 → all qs entries cleared. Fib entries untouched.
 
+#### Phase 7 — touch / mobile compatibility
+
+Detection runs on first call to `isTouchDevice()`:
+
+```js
+'ontouchstart' in window
+  || navigator.maxTouchPoints > 0
+  || navigator.msMaxTouchPoints > 0
+```
+
+When touch is detected, `<body data-ve-touch="1">` is set. CSS scoped to that attribute upgrades the runtime's interactive surfaces:
+
+| Surface | Desktop | Touch |
+|---------|---------|-------|
+| Table row/column handles | 22 × 22 px, 11 px font, 0.55 hover opacity | 32 × 32 px, 14 px font, 0.85 hover opacity |
+| Code-gutter line numbers | `padding: 0 10px 0 8px` | `padding: 6px 12px 6px 10px` (taller hit-strip) |
+
+Drag-text-select on prose works via the existing browser long-press → text-selection → `selectionchange`. A `touchend` listener mirrors the desktop `mouseup` listener and runs `handleProseDragSelection()` first; if it bails (selection is in math/tikz, or is empty), the snippet popup runs as fallback.
+
+Code-gutter drag uses dedicated `touchstart` / `touchmove` / `touchend` handlers (capture-phase). `touchstart` on a line number begins the drag, `touchmove` resolves the line under the finger via `document.elementFromPoint(touch.clientX, touch.clientY)` (touches don't bubble through `mouseover`), and `touchend` finalises the range.
+
+Touch tap fires the standard `click` event, so the multi-click chain (1× toggle / 2× select-all / 3× clear-block) works unchanged on touch.
+
+A floating **Clear all** button appears at `bottom: 14px; left: 120px` (next to the bottom-left Submit/Exit) **only on touch devices** and **only when `veSelection.length > 0`**. It mirrors what ESC does — wipes every entry, repaints every surface, then hides itself.
+
+```js
+window.addEventListener('keydown', e => { /* ESC → clear */ });
+clearAllBtn.click();           // touch equivalent
+```
+
+**Verified empirically** (2026-05-06) against `tests_dev/table-handles.html` in Chrome DevTools touch-emulated viewport (414 × 896, devicePixelRatio 2, mobile, touch):
+1. `body[data-ve-touch="1"]` set on init.
+2. `.ve-table-handle` computed size = 32 × 32 px, font 14 px (was 22 × 22 / 11 px on desktop).
+3. With nothing selected, Clear-all `display:none`. After clicking ◀ (MAINTAINER) and ▼ (ADMIN), Clear-all flips to `display:block`. Click → entries cleared, button hidden again.
+
 **Timeout/error sentinels** (the runner emits these when no submission arrives or when something is structurally wrong) keep their old shape too: `{"id": null, "reason": "timeout|no-file|missing-file|no-browser|...", ...}`.
 
 ### Required follow-up

@@ -501,7 +501,12 @@
       '.ve-code-linenum[data-ve-preview="1"] {',
       '  background:color-mix(in srgb, var(--ve-accent, #b8861f) 30%, transparent);',
       '  color:var(--ve-sel-text, #14110b);',
-      '}'
+      '}',
+      // ─── Phase 7: bigger hit-zones on touch devices ──────────────────
+      // body[data-ve-touch="1"] is set by isTouchDevice() on first call.
+      'body[data-ve-touch="1"] .ve-table-handle { width:32px; height:32px; font-size:14px; line-height:30px; }',
+      'body[data-ve-touch="1"] .ve-code-linenum { padding:6px 12px 6px 10px; }',
+      'body[data-ve-touch="1"] .ve-table-wrapper:hover .ve-table-handle { opacity:0.85; }'
     ].join('\n');
     document.head.appendChild(s);
   }
@@ -820,6 +825,52 @@
   window.veSubmit = function () { submitSelections('submit'); };
   window.veExit = function () { submitSelections('exit'); };
 
+  // Phase 7 — touch / mobile compatibility detector. Cached after first
+  // call so we don't re-query the platform every selection update.
+  var _isTouch = null;
+  function isTouchDevice() {
+    if (_isTouch !== null) return _isTouch;
+    _isTouch = (typeof window !== 'undefined') && (
+      ('ontouchstart' in window) ||
+      (navigator && (navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0))
+    );
+    if (_isTouch && document.body) document.body.setAttribute('data-ve-touch', '1');
+    return _isTouch;
+  }
+
+  function injectClearAllButton() {
+    if (!document.body) return;
+    if (!isTouchDevice()) return;
+    if (document.getElementById('ve-clear-all')) return;
+    var btn = document.createElement('button');
+    btn.id = 've-clear-all';
+    btn.type = 'button';
+    btn.textContent = 'Clear all';
+    btn.setAttribute('data-ve-overlay', '1');
+    btn.style.cssText =
+      'position:fixed;bottom:14px;left:120px;'
+      + 'z-index:2147483646;'
+      + 'min-width:84px;padding:9px 14px;'
+      + 'border-radius:8px;border:1px solid rgba(0,0,0,0.18);'
+      + 'font:600 13px/1.2 system-ui,-apple-system,sans-serif;'
+      + 'cursor:pointer;'
+      + 'box-shadow:0 2px 8px rgba(0,0,0,0.28);'
+      + 'background:rgba(255,255,255,0.92);color:#1f1a14;'
+      + 'transition:opacity 120ms;'
+      + 'display:none;'; // shown on demand by updateSubmitButtonsState
+    btn.addEventListener('click', function () {
+      // Mirror what ESC does — wipe all selections + repaint surfaces.
+      if (veSelection.length === 0) return;
+      if (typeof clearAllTextSelections === 'function') clearAllTextSelections();
+      veSelection.length = 0;
+      if (typeof repaintSelectedElements === 'function') repaintSelectedElements();
+      if (typeof repaintTableHandles === 'function') repaintTableHandles();
+      if (typeof repaintCodeGutters === 'function') repaintCodeGutters();
+      updateSubmitButtonsState();
+    });
+    document.body.appendChild(btn);
+  }
+
   function injectSubmitButtons() {
     if (!document.body) return;
     if (document.getElementById('ve-submit-tr')) return; // idempotent
@@ -856,6 +907,7 @@
       })(btn);
       document.body.appendChild(btn);
     }
+    injectClearAllButton(); // Phase 7: touch-only Clear-all button next to BL Submit
     updateSubmitButtonsState();
   }
 
@@ -875,6 +927,9 @@
         b.style.color = '#1f1a14';
       }
     }
+    // Phase 7: Clear-all is touch-only, visible only when there's something to clear.
+    var clearBtn = document.getElementById('ve-clear-all');
+    if (clearBtn) clearBtn.style.display = (isTouchDevice() && n > 0) ? 'inline-block' : 'none';
   }
 
   // ESC clears multi-select; Enter triggers global Submit/Exit. Both
@@ -3426,6 +3481,17 @@
         showSnippetPopup();
       }, 30);
     });
+    // Phase 7: touchend mirrors mouseup. The browser sets the selection
+    // after a long-press + drag; we just run the same Phase 4 → popup
+    // dispatch on touchend so touch-screen users get the same toggle.
+    document.addEventListener('touchend', function (ev) {
+      var target = (ev.target || document.body);
+      if (target.closest && target.closest('[data-ve-snippet-popup], [data-ve-overlay]')) return;
+      setTimeout(function () {
+        if (handleProseDragSelection()) return;
+        showSnippetPopup();
+      }, 30);
+    }, { passive: true });
     document.addEventListener('keyup', function (ev) {
       if (ev.shiftKey || ev.key === 'Shift') return;
       // Selection via keyboard nav: same Phase 4 → popup fallback chain.
@@ -4004,6 +4070,53 @@
       // distinguish 1×, 2×, 3× clicks per the TRDD vocabulary.
       handleGutterClickChain(snapshot.blockId, snapshot.line, snapshot.lineCount);
     }, true);
+
+    // Phase 7: touch parity — touchstart begins the drag, touchmove
+    // tracks the line under the finger via elementFromPoint (touch
+    // events don't bubble like mouseover), touchend finalises.
+    document.addEventListener('touchstart', function (ev) {
+      var hit = findCodeLineButton(ev.target);
+      if (!hit) return;
+      // preventDefault on the line button stops the long-press selection
+      // popup from hijacking the gesture on iOS.
+      ev.preventDefault();
+      gutterDragStart = {
+        blockId: hit.blockId,
+        line: hit.line,
+        dragging: false,
+        lineCount: hit.lineCount
+      };
+    }, { passive: false, capture: true });
+
+    document.addEventListener('touchmove', function (ev) {
+      if (!gutterDragStart) return;
+      var t = ev.touches && ev.touches[0];
+      if (!t) return;
+      var el = document.elementFromPoint(t.clientX, t.clientY);
+      var hit = findCodeLineButton(el);
+      if (!hit || hit.blockId !== gutterDragStart.blockId) return;
+      if (hit.line !== gutterDragStart.line) gutterDragStart.dragging = true;
+      paintGutterPreview(gutterDragStart.blockId, gutterDragStart.line, hit.line);
+    }, { passive: true, capture: true });
+
+    document.addEventListener('touchend', function (ev) {
+      if (!gutterDragStart) return;
+      var snapshot = gutterDragStart;
+      gutterDragStart = null;
+      var endLine = snapshot.line;
+      if (ev.changedTouches && ev.changedTouches[0]) {
+        var t = ev.changedTouches[0];
+        var el = document.elementFromPoint(t.clientX, t.clientY);
+        var hit = findCodeLineButton(el);
+        if (hit && hit.blockId === snapshot.blockId) endLine = hit.line;
+      }
+      if (snapshot.dragging) {
+        clearGutterPreview(snapshot.blockId);
+        pushCodeLineRange(snapshot.blockId, snapshot.line, endLine);
+        return;
+      }
+      handleGutterClickChain(snapshot.blockId, snapshot.line, snapshot.lineCount);
+    }, { passive: true, capture: true });
   }
 
   function handleGutterClickChain(blockId, line, lineCount) {
@@ -4072,34 +4185,28 @@
     for (var i = 0; i < pres.length; i++) initCodeGutter(pres[i]);
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () {
-      injectStyles();
-      initAllMath();      // KaTeX, lazy
-      initAllTikz();      // TikZJax, lazy
-      initAllGraphs();    // viz.js (Graphviz), lazy
-      initAllRegex();     // regex-vis, lazy from same-origin scripts/
-      initAllProse();
-      enhanceFocus();
-      initAllTableForms();
-      initAllTableHandles();   // Phase 5
-      initAllCodeGutters();    // Phase 6
-      setupGutterEvents();     // Phase 6
-      setupSnippetSelection();
-      setupMultiClickSelection();
-    });
-  } else {
+  function bootEverything() {
     injectStyles();
-    initAllMath();
-    initAllTikz();
-    initAllGraphs();
-    initAllRegex();
+    isTouchDevice(); // Phase 7: stamp body[data-ve-touch="1"] early so the
+                     // CSS that ups handle hit-zones is in effect by the
+                     // time the table/gutter overlays paint.
+    initAllMath();      // KaTeX, lazy
+    initAllTikz();      // TikZJax, lazy
+    initAllGraphs();    // viz.js (Graphviz), lazy
+    initAllRegex();     // regex-vis, lazy from same-origin scripts/
     initAllProse();
     enhanceFocus();
     initAllTableForms();
-    initAllTableHandles();
-    initAllCodeGutters();
-    setupGutterEvents();
-    setupSnippetSelection();
+    initAllTableHandles();   // Phase 5
+    initAllCodeGutters();    // Phase 6
+    setupGutterEvents();     // Phase 6 + Phase 7 (touch)
+    setupSnippetSelection(); // Phase 4 + Phase 7 (touchend)
+    setupMultiClickSelection();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootEverything);
+  } else {
+    bootEverything();
   }
 })();
