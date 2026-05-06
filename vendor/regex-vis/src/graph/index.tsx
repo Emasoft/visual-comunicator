@@ -18,7 +18,7 @@ const Graph: React.FC<Props> = ({ ast, errorMsg = null }) => {
 
   const [bindings, Selection] = useDragSelect({
     disabled: !!errorMsg,
-    className: 'rounded bg-blue-500/50 border border-blue-500',
+    className: 'rounded ve-regex-drag-overlay',
     onSelect: box => selectNodesByBox(box),
   })
 

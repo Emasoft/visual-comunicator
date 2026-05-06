@@ -13,7 +13,7 @@ const Expression: React.FC<Prop> = ({ regex, startIndex, endIndex }) => {
     <Cell label={t('Expression')}>
       <p className="font-mono text-sm break-words leading-6">
         <span>{regex.slice(0, startIndex)}</span>
-        <span className="bg-blue-500/50 rounded py-1">{regex.slice(startIndex, endIndex)}</span>
+        <span className="ve-regex-expression-highlight rounded py-1">{regex.slice(startIndex, endIndex)}</span>
         <span>{regex.slice(endIndex)}</span>
       </p>
     </Cell>

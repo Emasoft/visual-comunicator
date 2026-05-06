@@ -1,14 +1,7 @@
-import { useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { useUpdateEffect } from 'react-use'
 import { useEventListener } from 'usehooks-ts'
 import clsx from 'clsx'
 import EditTab from './edit-tab'
-import LegendTab from './legend-tab'
-import TestTab from './test-tab'
-import { useCurrentState } from '@/utils/hooks'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   redoAtom,
   removeAtom,
@@ -16,42 +9,24 @@ import {
   undoAtom,
 } from '@/atom'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 
-export type Tab = 'legend' | 'edit' | 'test'
+// visual-explainer customisation: drop the upstream Legend / Edit / Test
+// tab strip — agents are explaining one regex at a time and only the
+// edit features are useful here. The Edit panel is always visible; when
+// nothing is selected it shows a short placeholder, otherwise it
+// renders the per-node-type editing controls (insert / group /
+// quantifier / look-around / content). i18n is also stripped.
+
+export type Tab = 'edit'
 type Props = {
-  defaultTab: Tab
+  defaultTab?: Tab
   collapsed: boolean
 }
-function Editor({ defaultTab, collapsed }: Props) {
+function Editor({ collapsed }: Props) {
   const selectedIds = useAtomValue(selectedIdsAtom)
   const remove = useSetAtom(removeAtom)
   const undo = useSetAtom(undoAtom)
   const redo = useSetAtom(redoAtom)
-
-  const [tabValue, setTabValue, tabValueRef] = useCurrentState<Tab>(defaultTab)
-
-  const { t } = useTranslation()
-
-  useUpdateEffect(() => {
-    setTabValue(defaultTab)
-  }, [defaultTab])
-
-  useEffect(() => {
-    if (selectedIds.length > 0 && tabValueRef.current !== 'edit') {
-      setTabValue('edit')
-    }
-    if (selectedIds.length === 0 && tabValueRef.current === 'edit') {
-      setTabValue('legend')
-    }
-  }, [selectedIds, tabValueRef, setTabValue])
-
-  const editDisabled = selectedIds.length === 0
 
   useEventListener('keydown', (e: Event) => {
     const event = e as KeyboardEvent
@@ -75,53 +50,32 @@ function Editor({ defaultTab, collapsed }: Props) {
     }
   })
 
+  const empty = selectedIds.length === 0
+
   return (
-    <Tabs
-      value={tabValue}
-      onValueChange={(value: string) => setTabValue(value as Tab)}
-      className={clsx('flex flex-col h-[calc(100vh-64px)] py-4 border-l transition-width', collapsed ? 'w-[0px]' : 'w-[305px]')}
+    <div
+      className={clsx(
+        've-regex-edit-panel flex flex-col py-4 border-l transition-[width]',
+        collapsed ? 'w-[0px]' : 'w-[305px]',
+      )}
     >
-      <TooltipProvider delayDuration={500}>
-        <Tooltip>
-          <TabsList className="grid grid-cols-3 mx-4 mb-6">
-            <TabsTrigger value="legend">{t('Legends')}</TabsTrigger>
-            <TabsTrigger
-              value="edit"
-              disabled={editDisabled}
-              asChild={editDisabled}
-              className={
-                clsx({ 'cursor-not-allowed': editDisabled }, '!pointer-events-auto')
-              }
-            >
-              {editDisabled
-                ? (
-                    <TooltipTrigger>
-                      {t('Edit')}
-                    </TooltipTrigger>
-                  )
-                : t('Edit')}
-            </TabsTrigger>
-            <TabsTrigger value="test">{t('Test')}</TabsTrigger>
-          </TabsList>
-          <ScrollArea className="flex-1">
-            <div className="w-[305px] p-4 pt-0">
-              <TabsContent value="legend">
-                <LegendTab />
-              </TabsContent>
-              <TabsContent value="edit">
-                <EditTab />
-              </TabsContent>
-              <TabsContent value="test">
-                <TestTab />
-              </TabsContent>
-            </div>
-          </ScrollArea>
-          <TooltipContent>
-            <p>{t('You have to select nodes first')}</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    </Tabs>
+      <div className="px-4 mb-4 text-xs uppercase tracking-wider opacity-60 select-none">
+        Edit
+      </div>
+      <ScrollArea className="flex-1">
+        <div className="w-[305px] p-4 pt-0">
+          {empty
+            ? (
+                <p className="text-sm opacity-70 leading-relaxed">
+                  Click any node in the graph to edit it. Hold shift while
+                  clicking to extend the selection. Backspace removes the
+                  selected nodes; ⌘Z / ⌘⇧Z undo and redo.
+                </p>
+              )
+            : <EditTab />}
+        </div>
+      </ScrollArea>
+    </div>
   )
 }
 

@@ -27,13 +27,15 @@ import type { AST } from './parser'
 
 export type RenderOptions = {
   regex: string
-  defaultTab?: 'legend' | 'edit' | 'test'
+  // Reserved for future expansion. The plugin build only ships the
+  // edit tab — no legend / test variants.
+  defaultTab?: 'edit'
   onChange?: (next: { regex: string; ast: AST.Regex }) => void
 }
 
 // One Jotai store per mount, so multiple `.ve-regex` blocks on the
 // same page don't collide on the AST atom.
-function App({ regex: initialRegex, defaultTab = 'legend', onChange }: RenderOptions) {
+function App({ regex: initialRegex, onChange }: RenderOptions) {
   const [regex, setRegex] = useState(initialRegex)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [ast, setAst] = useAtom(astAtom)
@@ -69,7 +71,7 @@ function App({ regex: initialRegex, defaultTab = 'legend', onChange }: RenderOpt
   return (
     <div className="ve-regex-app">
       <Graph regex={regex} ast={ast as AST.Regex} errorMsg={errorMsg} />
-      <Editor defaultTab={defaultTab} collapsed={false} />
+      <Editor collapsed={false} />
     </div>
   )
 }

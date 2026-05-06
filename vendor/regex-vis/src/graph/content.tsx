@@ -20,7 +20,7 @@ function Content({ id, selected, children, ...restProps }: Props) {
       {selected && (
         <rect
           {...restProps}
-          className="fill-blue-500/30"
+          className="ve-regex-selected-fill"
           rx={GRAPH_NODE_BORDER_RADIUS}
           ry={GRAPH_NODE_BORDER_RADIUS}
         >

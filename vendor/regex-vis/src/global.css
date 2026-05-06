@@ -102,3 +102,38 @@
     @apply bg-background text-foreground font-sans;
   }
 }
+
+/* Themed selection paints (replace upstream's hard-coded blue). They
+   pick up the plugin's gold accent via --ve-accent (light/dark
+   variants resolved by the @media (prefers-color-scheme) block). */
+.ve-regex-app .ve-regex-selected-fill {
+  fill: var(--ve-accent, #b8861f);
+  fill-opacity: 0.32;
+}
+.ve-regex-app .ve-regex-drag-overlay {
+  background-color: color-mix(in srgb, var(--ve-accent, #b8861f) 35%, transparent);
+  border: 1px solid var(--ve-accent, #b8861f);
+}
+.ve-regex-app .ve-regex-expression-highlight {
+  background-color: color-mix(in srgb, var(--ve-accent, #b8861f) 45%, transparent);
+}
+
+/* Edit panel layout — the upstream Editor used h-[calc(100vh-64px)]
+   assuming a 64px page header, which makes the panel taller than the
+   embed in our document flow. Cap it to a sensible max + scroll. */
+.ve-regex-app .ve-regex-edit-panel {
+  max-height: 640px;
+  height: auto;
+}
+
+/* Force the embed layout side-by-side (graph left, panel right) and
+   give the edit panel a visible separator that uses our accent. */
+.ve-regex-app {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  background: transparent;
+}
+.ve-regex-app .ve-regex-edit-panel {
+  border-left-color: color-mix(in srgb, var(--ve-accent, #b8861f) 28%, transparent);
+}
