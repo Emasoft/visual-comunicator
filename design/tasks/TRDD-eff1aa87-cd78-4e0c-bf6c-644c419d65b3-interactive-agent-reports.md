@@ -3,7 +3,7 @@
 **TRDD ID:** `eff1aa87-cd78-4e0c-bf6c-644c419d65b3`
 **Filename:** `design/tasks/TRDD-eff1aa87-cd78-4e0c-bf6c-644c419d65b3-interactive-agent-reports.md`
 **Tracked in:** this repo (design/tasks/ is git-tracked)
-**Status:** v1 implementation in progress (2026-05-06)
+**Status:** v1 shipped (2026-05-06); v2 implementation in progress (2026-05-06)
 **Created:** 2026-05-06
 **Plugin:** visual-explainer
 
@@ -190,3 +190,110 @@ v1 ships Phases 1, 2, 3, 5, 6, 7 (skip the slash command — manual invocation i
 - **2026-05-06** — Per-finding claude replies are stored in a sidecar JSON next to the report (not inline in the HTML) so the source markdown stays canonical and re-rendering is idempotent.
 - **2026-05-06** — Each finding's reply textarea pushes ONE `kind:'finding-reply'` entry, replaced on every keystroke (debounced 350 ms). Submit sends the latest text per finding.
 - **2026-05-06** — v1 is manual-loop (the user re-invokes the slash command per round). v2 will add a watch loop.
+
+---
+
+## 6. v2 — modal comment threads with live in-place reply
+
+After shipping v1, the user gave a refined spec for the interaction model.
+
+### 6.1 Original v2 user spec (verbatim)
+
+> remember the iter:
+> - each point/row/paragraph is market with an hidden id to let claude recognize the thing the user is referring to without having to read it again (waste of tokens). But if claude never read it before, then the id must still be accompanied by the point/row/paragraph that the user will comment later (see below)
+> - user selects one point/row/paragraph
+> - for selected points/rows/paragraphs the mouse hovering on them displays an option "comment this"
+> - the user click on "comment this"
+> - an input box is added on the right of the point/row/paragraph, with indication to "write your comment here..", modal (cannot interact with anything else except that). The box has a SEND and CANCEL buttons. the box MUST NOT COVER THE TEXT OF THE REPORT IN ANY WAY! scroll more to the right if needed, add a column to the table or add a space wrapping the text, but let the box never overlap or hide the text.
+> - the user will write his comment into the box and press SEND (or cancel to dismiss the floating box)
+> - claude receive the comments with the hidden id of the point/row/paragraph (and only if cladde has never read the content of the document with the ids, then the point/row/paragraph content is fully shown to claude)
+> - claude answer to the comment of the user via a special tool/skill of the plugin
+> - this tool will update the html page without closing it, so the user will only see its comment being sent and after a couple of seconds the claude answer will be printed in the SAME input text box where he wrote the first comment.
+> - the user can use a "answer" button to add a followup comment in response to the claude answer. and claude can answer again. the user can stop this choosing DONE button instead of ANSWER button.
+
+### 6.2 Comment-box layout (user sketch)
+
+```
+----------------------------------------
+|  thread  |                           |
+|----------|                           |
+| 1:  user |                           |
+| 2: agent |                           |
+| 3:  user |                           |
+| 4: agent |  (text of the message)    |
+|>5:  user<|  (becomes an input box    |
+|          |   when the user press     |
+|          |   ANSWER)                 |
+|          |                           |
+|          |                           | <--- vertical scrollbar if content overflows
+|          |                           |
+|          |                           |
+|--------------------------------------|
+|    [ANSWER]           [DONE]         |
+----------------------------------------
+```
+
+Two columns inside the box:
+- **Left** — clickable thread index. One row per turn (`N: user` or `N: agent`). The active turn is highlighted with `>` markers and a stronger background tint.
+- **Right** — content of the active turn. When the active turn is the next-to-be-composed user turn, the right pane is an editable textarea; otherwise it's static rendered text.
+- **Bottom** — `[ANSWER]` (submit the active textarea text and start the next round) and `[DONE]` (close the modal).
+
+### 6.3 Hidden-ID model
+
+Every commentable element in the rendered HTML carries a `data-ve-comment-id="<8-char-hex>"`. The id is computed from a deterministic hash of the element's normalised text content (whitespace-collapsed, first 200 chars), so the same paragraph in the same report always gets the same id across re-renders (and the user's prior comments stay anchored).
+
+The renderer also emits a sidecar **`<report>.idmap.json`** that maps every `commentId` → `{kind, text, sectionId}`. The orchestrator consults this when an unknown id arrives in a comment payload — the id alone is enough for "Claude already saw this" rounds, but the orchestrator can dereference to the full text on demand.
+
+### 6.4 Hover affordance
+
+On `mouseenter` of any `[data-ve-comment-id]`, the runtime injects a tiny "💬 Comment this" pill in the top-right corner of the element (absolute-positioned over the element's first row). On `mouseleave` the pill fades out. Click on the pill opens the modal anchored to that element.
+
+The pill is intentionally small (16 px tall, 24 px-text wide) so it never disrupts the visual flow of the report itself.
+
+### 6.5 Reflow vs overlay
+
+The modal is **never allowed to overlap report text**. Implementation:
+
+- The modal is `position: fixed; right: 0; top: 0; height: 100vh; width: 460px`.
+- When the modal opens, the runtime adds `body[data-ve-comment-modal-open="1"]` and a CSS rule that pushes `main { margin-right: 460px; max-width: calc(86ch - 0px); }`.
+- Long table rows that would still overflow horizontally get a `scroll-snap-type: x` so the user can side-scroll without losing the modal anchor.
+
+The page becomes inert (`pointer-events: none`) **except** the modal itself and the active commentable element. ESC closes the modal (same as DONE).
+
+### 6.6 Transport — file-based polling
+
+A new pair of HTTP endpoints in `scripts/ve-select.py`:
+
+- `POST /__ve-comment {threadId, commentId, sourcePath, comment}` — appends to `<project>/.ve-comments/<threadId>.jsonl` (one JSON per turn). Returns `{threadId, queued: true}`. Idempotent — re-POSTing the same `{threadId, turn}` does not double-write.
+- `GET /__ve-reply/<threadId>?since=<turn>` — returns 204 if no new turns are available, else 200 with `{turn, role:"agent", text}`. The page polls this every 1.5 s after each ANSWER.
+
+Reply files are written to `<project>/.ve-comments/<threadId>.reply.<turn>.json` by the orchestrator slash command. The runner just serves whatever is on disk.
+
+### 6.7 Orchestrator — `/visual-explainer:respond-to-comment`
+
+A new slash command:
+
+- `--queue-dir <path>` (default: `<project>/.ve-comments`).
+- Reads every `.jsonl` file with at least one un-replied user turn.
+- For each, looks up the source doc's `idmap.json`. If the `commentId` is unknown (Claude has never read the doc), it inlines the full text from `<report>.md`. Otherwise just passes the id.
+- Generates a per-comment reply scoped to the thread + the source-doc context.
+- Writes `<threadId>.reply.<turn>.json` with `{turn, role:"agent", text}`.
+- `--watch` mode loops every 2 s, picking up new turns as they arrive.
+
+### 6.8 Phased build plan (v2)
+
+| Phase | Scope | Files | Estimated LOC |
+|------:|-------|-------|--------------:|
+| v2.1 | Renderer: add `data-ve-comment-id` to every `<p>`, `<li>`, `<tr>`, `<pre>`, `.ve-finding-meta`. Emit `<report>.idmap.json`. | scripts/render-interactive-report.py | ~120 |
+| v2.2 | Runtime: hover affordance pill, modal box (master-detail layout), ANSWER/DONE buttons, ESC closes, page reflow, fetch + 1.5 s polling, localStorage-backed thread state. | ve-runtime.js | ~400 |
+| v2.3 | ve-select.py: POST `/__ve-comment` queue + GET `/__ve-reply/<threadId>` polling. | scripts/ve-select.py | ~100 |
+| v2.4 | Slash command `/visual-explainer:respond-to-comment`. | commands/respond-to-comment.md | ~100 |
+| v2.5 | Cookbook + sample replies update. | references/interactive-selection.md | ~30 |
+| v2.6 | End-to-end test on the symphony-vs-amoa report. | tests_dev/ | — |
+
+### 6.9 Decision log (v2)
+
+- **2026-05-06** — Modal layout matches the user's sketch: left thread index, right active turn content (editable when next-to-compose), ANSWER + DONE at bottom.
+- **2026-05-06** — Modal never overlaps report text — page reflows via `body[data-ve-comment-modal-open]` adding `margin-right: 460px` to `<main>`.
+- **2026-05-06** — Transport is file-based polling via two new endpoints in `ve-select.py` (`POST /__ve-comment`, `GET /__ve-reply/<id>`). 1.5 s poll interval. Simpler than SSE, works without WebSocket support, survives the runner restarting.
+- **2026-05-06** — Hidden ids are 8-char hex hashes of normalised text content (first 200 chars) — stable across renders so prior comments stay anchored. Sidecar `<report>.idmap.json` is the dereference table the orchestrator uses when an unknown id arrives.
