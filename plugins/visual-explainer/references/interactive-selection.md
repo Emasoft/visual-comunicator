@@ -421,6 +421,38 @@ clearAllBtn.click();           // touch equivalent
 2. `.ve-table-handle` computed size = 32 × 32 px, font 14 px (was 22 × 22 / 11 px on desktop).
 3. With nothing selected, Clear-all `display:none`. After clicking ◀ (MAINTAINER) and ▼ (ADMIN), Clear-all flips to `display:block`. Click → entries cleared, button hidden again.
 
+#### Interactive agent reports — `kind:"finding-reply"` (TRDD-eff1aa87)
+
+Pages rendered by `scripts/render-interactive-report.py` carry one or more
+
+```html
+<textarea class="ve-finding-reply" data-ve-finding-reply
+          data-ve-finding-id="finding-N" rows="3"
+          placeholder="Reply to this finding…"></textarea>
+```
+
+inside each `<section data-ve-finding-id="finding-N">`. The runtime listens for `input` events on those textareas (debounced 350 ms). On each keystroke, it pushes / replaces a single `kind:"finding-reply"` entry per `findingId` (the entry's `entryId` is `finding-reply:<findingId>` so the same finding can never appear twice).
+
+```json
+{ "kind": "finding-reply",
+  "entryId": "finding-reply:finding-1",
+  "findingId": "finding-1",
+  "text": "I prefer to default to '' instead." }
+```
+
+Empty (after trim) → entry removed. ESC clears every `finding-reply` entry AND empties the visible textarea contents (`clearAllFindingReplyTextareas()`).
+
+The orchestrator (the slash command `/visual-explainer:interactive-report`) reads the submit POST, generates a per-finding `claude` response per entry, appends `{round, user, claude}` to `<report>.replies.json`, then re-runs the renderer. The next iteration of the page shows the new round of replies as a `<div class="ve-finding-round">` block above the always-present new-reply textarea — Claude's response sits inline next to the user's comment, exactly as requested.
+
+**Verified empirically** (2026-05-06) against `tests_dev/sample-report.html` (4 findings, with `replies.json` carrying 1 prior round on finding-2):
+1. Renderer emitted 4 `<section data-ve-finding-id="finding-N">` wrappers.
+2. Severity chips rendered (minor / major / info / info).
+3. Finding-2 showed 1 prior round (User · round 1 quote + Claude · round 1 reply) above its empty textarea.
+4. Typing into finding-1's textarea pushed `kind:"finding-reply" findingId:"finding-1"` entry; submit count showed `(1)`.
+5. Updating the same textarea text replaced the entry (no duplicate).
+6. Clearing the textarea (whitespace-only) removed the entry (count returned to 0).
+7. Adding a finding-3 reply alongside finding-1 → 2 entries, submit count `(2)`.
+
 **Timeout/error sentinels** (the runner emits these when no submission arrives or when something is structurally wrong) keep their old shape too: `{"id": null, "reason": "timeout|no-file|missing-file|no-browser|...", ...}`.
 
 ### Required follow-up
@@ -448,6 +480,7 @@ For per-entry kinds beyond `element`, branch a second time on the entry's own `k
 | `codeline`        | "You picked **line «line»** of code block `«block»`. What should I do with it?"                           |
 | `codelines`       | "You picked **lines «fromLine»–«toLine»** of code block `«block»`. What should I do with them?"           |
 | `regex-edit`      | "You changed the regex from `«original»` to `«edited»`. Want me to update the test cases / explanation / surrounding code?" |
+| `finding-reply`   | (no prompt — read the user's per-finding text and append a per-finding `claude` response to the sidecar replies.json, then re-render via `/visual-explainer:interactive-report`) |
 
 `regex-edit` is special — it represents a USER-AUTHORED MUTATION rather than a click on an existing element. The `original` and `edited` strings + the `ast` give the agent everything needed to act on the change without re-prompting.
 

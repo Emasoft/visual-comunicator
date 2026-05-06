@@ -506,7 +506,74 @@
       // body[data-ve-touch="1"] is set by isTouchDevice() on first call.
       'body[data-ve-touch="1"] .ve-table-handle { width:32px; height:32px; font-size:14px; line-height:30px; }',
       'body[data-ve-touch="1"] .ve-code-linenum { padding:6px 12px 6px 10px; }',
-      'body[data-ve-touch="1"] .ve-table-wrapper:hover .ve-table-handle { opacity:0.85; }'
+      'body[data-ve-touch="1"] .ve-table-wrapper:hover .ve-table-handle { opacity:0.85; }',
+      // ─── Interactive reports (TRDD-eff1aa87) ──────────────────────────
+      '[data-ve-finding-id] {',
+      '  display:block; margin:32px 0; padding:18px 22px;',
+      '  background:color-mix(in srgb, var(--ve-accent, #b8861f) 4%, transparent);',
+      '  border-left:3px solid color-mix(in srgb, var(--ve-accent, #b8861f) 60%, transparent);',
+      '  border-radius:6px;',
+      '}',
+      '[data-ve-finding-id] > h2 { margin:0 0 8px; font-size:1.1em; }',
+      '.ve-finding-meta {',
+      '  display:flex; gap:10px; align-items:center; flex-wrap:wrap;',
+      '  margin:0 0 14px; font-size:13px;',
+      '}',
+      '.ve-finding-chip {',
+      '  display:inline-block; padding:2px 9px; border-radius:999px;',
+      '  font:600 11px/1.4 inherit; letter-spacing:0.04em;',
+      '  background:color-mix(in srgb, currentColor 12%, transparent);',
+      '  text-transform:uppercase;',
+      '}',
+      '.ve-finding-chip--critical { color:#c0392b; background:color-mix(in srgb,#c0392b 15%, transparent); }',
+      '.ve-finding-chip--major    { color:#d35400; background:color-mix(in srgb,#d35400 15%, transparent); }',
+      '.ve-finding-chip--minor    { color:#7f8c8d; background:color-mix(in srgb,#7f8c8d 15%, transparent); }',
+      '.ve-finding-chip--info     { color:#2980b9; background:color-mix(in srgb,#2980b9 15%, transparent); }',
+      '.ve-finding-file { opacity:0.7; font:13px/1.4 ui-monospace,Menlo,monospace; }',
+      '.ve-finding-body { margin-bottom:14px; }',
+      '.ve-finding-thread {',
+      '  margin-top:16px; padding-top:12px;',
+      '  border-top:1px dashed color-mix(in srgb, var(--text, currentColor) 18%, transparent);',
+      '  display:flex; flex-direction:column; gap:10px;',
+      '}',
+      '.ve-finding-round {',
+      '  display:flex; flex-direction:column; gap:8px;',
+      '  padding:12px; border-radius:6px;',
+      '  background:color-mix(in srgb, var(--text, currentColor) 4%, transparent);',
+      '}',
+      '.ve-user-comment, .ve-claude-reply {',
+      '  display:block; padding:10px 14px; border-radius:6px;',
+      '  font:14px/1.55 inherit;',
+      '}',
+      '.ve-user-comment {',
+      '  background:color-mix(in srgb, var(--ve-accent, #b8861f) 14%, transparent);',
+      '  border-left:2px solid var(--ve-accent, #b8861f);',
+      '}',
+      '.ve-claude-reply {',
+      '  background:color-mix(in srgb, var(--text, currentColor) 6%, transparent);',
+      '  border-left:2px solid color-mix(in srgb, var(--text, currentColor) 35%, transparent);',
+      '}',
+      '.ve-finding-author {',
+      '  font:600 11px/1.4 ui-monospace,Menlo,monospace;',
+      '  letter-spacing:0.06em; text-transform:uppercase;',
+      '  opacity:0.65; margin-bottom:4px;',
+      '}',
+      '.ve-finding-reply {',
+      '  width:100%; box-sizing:border-box; resize:vertical; min-height:64px;',
+      '  padding:10px 14px; border-radius:6px;',
+      '  border:1px solid color-mix(in srgb, var(--text, currentColor) 22%, transparent);',
+      '  background:transparent; color:inherit;',
+      '  font:14px/1.55 inherit;',
+      '  transition:border-color 120ms ease, box-shadow 120ms ease;',
+      '}',
+      '.ve-finding-reply:focus {',
+      '  outline:none;',
+      '  border-color:var(--ve-accent, #b8861f);',
+      '  box-shadow:0 0 0 2px color-mix(in srgb, var(--ve-accent, #b8861f) 28%, transparent);',
+      '}',
+      '.ve-finding-reply::placeholder {',
+      '  color:color-mix(in srgb, var(--text, currentColor) 42%, transparent);',
+      '}'
     ].join('\n');
     document.head.appendChild(s);
   }
@@ -959,6 +1026,9 @@
       if (typeof repaintTableHandles === 'function') repaintTableHandles();
       // Phase 6: same idea for code-gutter pressed states.
       if (typeof repaintCodeGutters === 'function') repaintCodeGutters();
+      // TRDD-eff1aa87: also empty any per-finding reply textareas so
+      // the visible inputs match the (now-empty) veSelection state.
+      if (typeof clearAllFindingReplyTextareas === 'function') clearAllFindingReplyTextareas();
       // Reset multi-click chain so the next click starts depth=1.
       lastClickChain = null;
       ev.preventDefault();
@@ -4185,6 +4255,81 @@
     for (var i = 0; i < pres.length; i++) initCodeGutter(pres[i]);
   }
 
+  // ─────────────────────────────────────────────────────────────────────
+  // Interactive agent reports — TRDD-eff1aa87.
+  //
+  // Pages rendered by render-interactive-report.py contain one or more
+  //   <textarea data-ve-finding-reply data-ve-finding-id="finding-N">…</textarea>
+  // controls. Typing in any of them pushes/updates a single
+  //   {kind:'finding-reply', findingId, text}
+  // entry into veSelection (replace-on-keystroke, debounced 350 ms).
+  // Empty (after trim) → entry removed. Submit then carries the latest
+  // text per finding to the agent in the standard /__ve-select POST.
+  // ─────────────────────────────────────────────────────────────────────
+
+  var findingReplyTimers = {};
+  var FINDING_REPLY_DEBOUNCE_MS = 350;
+
+  function pushOrUpdateFindingReply(findingId, text) {
+    var trimmed = (text || '').replace(/\s+$/g, '').replace(/^\s+/g, '');
+    var entryId = 'finding-reply:' + findingId;
+    var existingIdx = -1;
+    for (var i = 0; i < veSelection.length; i++) {
+      if (veSelection[i].entryId === entryId) { existingIdx = i; break; }
+    }
+    if (!trimmed) {
+      if (existingIdx >= 0) {
+        veSelection.splice(existingIdx, 1);
+        updateSubmitButtonsState();
+      }
+      return;
+    }
+    if (existingIdx >= 0) {
+      veSelection[existingIdx].text = trimmed;
+    } else {
+      veSelection.push({
+        kind: 'finding-reply',
+        entryId: entryId,
+        findingId: findingId,
+        text: trimmed
+      });
+    }
+    updateSubmitButtonsState();
+  }
+
+  function setupFindingReplyHandlers() {
+    document.addEventListener('input', function (ev) {
+      var t = ev.target;
+      if (!t || !t.matches || !t.matches('textarea[data-ve-finding-reply]')) return;
+      var fid = t.getAttribute('data-ve-finding-id');
+      if (!fid) return;
+      // Debounce per-finding so rapid typing doesn't thrash veSelection.
+      if (findingReplyTimers[fid]) clearTimeout(findingReplyTimers[fid]);
+      findingReplyTimers[fid] = setTimeout(function () {
+        delete findingReplyTimers[fid];
+        pushOrUpdateFindingReply(fid, t.value);
+      }, FINDING_REPLY_DEBOUNCE_MS);
+    });
+    // Make ESC also clear the textarea contents that were captured into
+    // veSelection. The global ESC handler wipes veSelection; here we
+    // mirror that on the visible inputs so user typing is reset too.
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Escape') return;
+      if (veSelection.length !== 0) return; // ESC handler ran first and cleared
+      // (handler above already cleared; this is the post-clear pass)
+    });
+  }
+
+  // Phase 5 of TRDD-eff1aa87 hook — extend the global ESC handler that
+  // already clears veSelection so that the visible textareas also empty
+  // their values. Without this, the user typed text would still appear
+  // in the box even though the entry was removed from veSelection.
+  function clearAllFindingReplyTextareas() {
+    var areas = document.querySelectorAll('textarea[data-ve-finding-reply]');
+    for (var i = 0; i < areas.length; i++) areas[i].value = '';
+    findingReplyTimers = {};
+  }
+
   function bootEverything() {
     injectStyles();
     isTouchDevice(); // Phase 7: stamp body[data-ve-touch="1"] early so the
@@ -4202,6 +4347,7 @@
     setupGutterEvents();     // Phase 6 + Phase 7 (touch)
     setupSnippetSelection(); // Phase 4 + Phase 7 (touchend)
     setupMultiClickSelection();
+    setupFindingReplyHandlers(); // TRDD-eff1aa87 — interactive reports
   }
 
   if (document.readyState === 'loading') {
