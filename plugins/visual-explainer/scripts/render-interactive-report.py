@@ -43,6 +43,14 @@ FINDING_HEADER_RE = re.compile(
     re.IGNORECASE,
 )
 
+# In --mode auto, every `## …` heading becomes a finding section. The
+# numbered prefix (e.g. "1.2", "3.4.5") is captured if present so the
+# findingId reads `finding-1.2`; otherwise we fall back to a sequential
+# index.
+ANY_H2_RE = re.compile(
+    r"^##\s+(?:(?P<num>\d+(?:\.\d+)*)\s+)?(?P<title>.+?)\s*$",
+)
+
 META_COMMENT_RE = re.compile(
     r"<!--\s*ve-finding\s+(?P<attrs>.*?)\s*-->",
     re.IGNORECASE | re.DOTALL,
@@ -68,40 +76,76 @@ class Report:
     warnings: list[str]
 
 
-def parse_report(md: str) -> Report:
+def parse_report(md: str, *, mode: str = "finding") -> Report:
+    """Parse `md` into a Report.
+
+    mode='finding' — only `## Finding N: …` headers anchor a thread;
+                     other `##` headings in the preamble produce a
+                     structural warning. (default; original behaviour)
+    mode='auto'    — every `## …` heading anchors a thread. The
+                     numbered prefix in the heading (e.g. "1.2") is
+                     used as the finding id; otherwise a sequential
+                     index is assigned.
+    """
     lines = md.splitlines()
     preamble: list[str] = []
     findings: list[Finding] = []
     warnings: list[str] = []
     cur: Finding | None = None
     cur_body: list[str] = []
+    auto_idx = 0
+    seen_ids: dict[str, int] = {}
 
     def flush_current():
         if cur is not None:
             cur.body_md = "\n".join(cur_body).strip()
             findings.append(cur)
 
+    def make_id(raw_num: str | None) -> str:
+        nonlocal auto_idx
+        base = raw_num.strip() if raw_num else ""
+        if not base:
+            auto_idx += 1
+            base = str(auto_idx)
+        candidate = f"finding-{base}"
+        # De-dup if the same numbered prefix appears twice (rare but
+        # possible with hand-written reports).
+        n = seen_ids.get(candidate, 0)
+        seen_ids[candidate] = n + 1
+        return candidate if n == 0 else f"{candidate}-{n+1}"
+
     for idx, raw in enumerate(lines):
-        m = FINDING_HEADER_RE.match(raw)
-        if m:
+        m_finding = FINDING_HEADER_RE.match(raw)
+        m_any = ANY_H2_RE.match(raw) if mode == "auto" else None
+        if m_finding:
             flush_current()
-            num = m.group("num").strip()
-            title = m.group("title").strip()
+            num = m_finding.group("num").strip()
+            title = m_finding.group("title").strip()
             cur = Finding(
-                findingId=f"finding-{num}",
+                findingId=make_id(num),
                 title=title or f"Finding {num}",
                 body_md="",
             )
             cur_body = []
             continue
-        # Detect non-Finding `##` headings while INSIDE a finding section —
-        # they're part of the body. Detect them in PREAMBLE — they're a
-        # structural warning (the agent should switch to "## Finding N:").
-        if cur is None and raw.startswith("## "):
+        if m_any:
+            flush_current()
+            num = m_any.group("num")
+            title = m_any.group("title").strip()
+            cur = Finding(
+                findingId=make_id(num),
+                title=(f"{num} {title}" if num else title),
+                body_md="",
+            )
+            cur_body = []
+            continue
+        # In finding mode, flag stray `##` headings in preamble.
+        if mode == "finding" and cur is None and raw.startswith("## "):
             warnings.append(
                 f"Line {idx+1}: non-Finding `##` heading in preamble — "
                 "use `## Finding N: <title>` so the renderer can anchor "
-                f"a thread. (found: {raw!r})"
+                f"a thread, or pass --mode auto to anchor every `##`. "
+                f"(found: {raw!r})"
             )
         if cur is None:
             preamble.append(raw)
@@ -393,8 +437,8 @@ def render_finding_html(f: Finding, prior_rounds: list[dict]) -> str:
     )
 
 
-def render(report_md: str, replies: dict, *, title: str, runtime_url: str) -> str:
-    rep = parse_report(report_md)
+def render(report_md: str, replies: dict, *, title: str, runtime_url: str, mode: str = "finding") -> str:
+    rep = parse_report(report_md, mode=mode)
     prior = (replies or {}).get("findings", {})
 
     findings_blocks = []
@@ -442,6 +486,15 @@ def main(argv: list[str] | None = None) -> int:
         default="ve-runtime.js",
         help="src for the <script> tag that loads the runtime (default: ve-runtime.js)",
     )
+    p.add_argument(
+        "--mode",
+        choices=["finding", "auto"],
+        default="finding",
+        help=(
+            "finding (default): only `## Finding N: <title>` headings anchor a thread. "
+            "auto: every `## ...` heading anchors a thread (numbered prefix becomes the id)."
+        ),
+    )
     args = p.parse_args(argv)
 
     report_path = Path(args.report)
@@ -475,6 +528,7 @@ def main(argv: list[str] | None = None) -> int:
         report_md, replies,
         title=title,
         runtime_url=args.runtime_url,
+        mode=args.mode,
     )
     out_path.write_text(html_doc, encoding="utf-8")
     print(out_path)
