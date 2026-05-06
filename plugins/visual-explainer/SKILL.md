@@ -248,6 +248,7 @@ Vary the choice each time. If the last diagram was dark and technical, make the 
 
 **Read the reference material** before generating. Don't memorize it — read it each time to absorb the patterns.
 - **Always** read `./references/interactive-selection.md` — every page must wire up element selection; this doc covers the payload schema, what to mark as selectable, Mermaid `click` directive integration, Chart.js wiring, and table-form (radio/checkbox) mode.
+- Before editing the runtime (`scripts/ve-runtime.js`) or the embedded ve-regex, read `./references/runtime-bug-patterns.md` — it catalogues the fixed bug classes (hover-bridge, polling-resume, atomic-save, per-mount Jotai state, case-insensitive shortcut keys, wide-graph overflow) and points at the regression tests under `./tests/scripts/`. Run `./tests/run-all-tests.sh` to verify any runtime change.
 - For text-heavy architecture overviews (card content matters more than topology): read `./templates/architecture.html`
 - For flowcharts, sequence diagrams, ER, state machines, mind maps, class diagrams, C4: read `./templates/mermaid-flowchart.html`
 - For data tables, comparisons, audits, feature matrices, **and tables that ask the user a question**: read `./templates/data-table.html` (it demonstrates passive selection plus single-choice and multi-choice form modes)
