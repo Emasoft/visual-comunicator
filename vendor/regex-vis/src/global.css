@@ -127,13 +127,32 @@
 }
 
 /* Force the embed layout side-by-side (graph left, panel right) and
-   give the edit panel a visible separator that uses our accent. */
+   give the edit panel a visible separator that uses our accent. The
+   `overflow: hidden` on `.ve-regex-app` clips the graph wrapper so it
+   never grows the page; the graph wrapper itself opts back into
+   horizontal scroll (see below) so very wide regexes stay reachable
+   inside the embed instead of pushing the whole document layout. */
 .ve-regex-app {
   display: flex;
   align-items: flex-start;
   gap: 16px;
   background: transparent;
+  overflow: hidden;
+  max-width: 100%;
 }
 .ve-regex-app .ve-regex-edit-panel {
   border-left-color: color-mix(in srgb, var(--ve-accent, #b8861f) 28%, transparent);
+}
+
+/* Graph side: take the remaining flex space, allow shrinking below
+   the SVG's intrinsic width, and scroll horizontally when the SVG is
+   wider than the available space. The upstream Graph component wraps
+   its SVG in <div class="relative inline-block">; we override the
+   inline-block sizing so it cooperates with flex layout. */
+.ve-regex-app > .relative.inline-block {
+  flex: 1 1 0;
+  min-width: 0;
+  display: block;
+  overflow-x: auto;
+  overflow-y: visible;
 }

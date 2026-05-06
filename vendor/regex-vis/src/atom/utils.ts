@@ -1,5 +1,5 @@
 import { atom } from 'jotai'
-import { astAtom, groupNamesAtom, undoStack } from './atoms'
+import { astAtom, groupNamesAtom, redoStackAtom, undoStackAtom } from './atoms'
 import type { AST } from '@/parser'
 import { makeChoiceValid, visit } from '@/parser'
 import { toast } from '@/components/ui/use-toast'
@@ -25,8 +25,14 @@ export const refreshGroupAtom = atom(null, (get, set, ast: AST.Regex) => {
   set(groupNamesAtom, groupNames)
 })
 
-export const pushUndoAtom = atom(null, (get) => {
-  undoStack.push(get(astAtom))
+export const pushUndoAtom = atom(null, (get, set) => {
+  set(undoStackAtom, [...get(undoStackAtom), get(astAtom)])
+  // Any new edit invalidates the redo history — match the original
+  // semantics where redo only applied while the user was scrubbing
+  // through undo state without making fresh changes.
+  if (get(redoStackAtom).length > 0) {
+    set(redoStackAtom, [])
+  }
 })
 
 export const makeChoiceValidAtom = atom(null, (get, set, ast: AST.Regex) => {

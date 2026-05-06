@@ -16,6 +16,21 @@ export const selectNodeAtom = atom(null, (get, set, id: string) => {
   }
 })
 
+// Shift+click: append or remove the node from the current selection.
+// The empty-state placeholder advertises this behaviour ("Hold shift
+// while clicking to extend the selection") but the upstream click
+// handler ignored e.shiftKey and always replaced. Now the graph's
+// Content node-click handler routes shift-clicks here so users can
+// build multi-node selections (Backspace removes them all at once).
+export const toggleSelectNodeAtom = atom(null, (get, set, id: string) => {
+  const selectedIds = get(selectedIdsAtom)
+  if (selectedIds.includes(id)) {
+    set(selectedIdsAtom, selectedIds.filter(existing => existing !== id))
+  } else {
+    set(selectedIdsAtom, [...selectedIds, id])
+  }
+})
+
 export const selectNodesAtom = atom(null, (get, set, ids: string[]) => {
   set(selectedIdsAtom, ids)
 })

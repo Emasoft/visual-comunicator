@@ -1,16 +1,20 @@
 import React from 'react'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { isPrimaryGraphAtom, selectNodeAtom } from '@/atom'
+import { isPrimaryGraphAtom, selectNodeAtom, toggleSelectNodeAtom } from '@/atom'
 import { GRAPH_NODE_BORDER_RADIUS } from '@/constants'
 
 type Props = { id: string, selected: boolean } & React.ComponentProps<'rect'>
 
 function Content({ id, selected, children, ...restProps }: Props) {
   const selectNode = useSetAtom(selectNodeAtom)
+  const toggleSelectNode = useSetAtom(toggleSelectNodeAtom)
   const isPrimaryGraph = useAtomValue(isPrimaryGraphAtom)
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (isPrimaryGraph) {
+    if (!isPrimaryGraph) return
+    if (e.shiftKey) {
+      toggleSelectNode(id)
+    } else {
       selectNode(id)
     }
   }

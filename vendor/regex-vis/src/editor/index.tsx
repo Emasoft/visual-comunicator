@@ -39,12 +39,17 @@ function Editor({ collapsed }: Props) {
       e.preventDefault()
       return remove()
     }
+    // Compare case-insensitively because `KeyboardEvent.key` reflects the
+    // produced character: `'z'` for ⌘Z but `'Z'` for ⌘⇧Z (Shift case-shifts
+    // the key value). The upstream check `key === 'z'` therefore never
+    // matched the redo combo, so ⌘⇧Z silently did nothing.
     const metaKey = event.ctrlKey || event.metaKey
-    if (metaKey && event.shiftKey && key === 'z') {
+    const isZ = key === 'z' || key === 'Z'
+    if (metaKey && event.shiftKey && isZ) {
       e.preventDefault()
       return redo()
     }
-    if (metaKey && key === 'z') {
+    if (metaKey && isZ) {
       e.preventDefault()
       return undo()
     }

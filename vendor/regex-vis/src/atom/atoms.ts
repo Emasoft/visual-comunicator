@@ -3,8 +3,14 @@ import { atomWithImmer } from 'jotai-immer'
 import type { AST } from '@/parser'
 import type { NodeSize } from '@/modules/graph/measure'
 
-export const undoStack: AST.Regex[] = []
-export const redoStack: AST.Regex[] = []
+// Per-mount undo / redo history. The plugin's runtime mounts a fresh
+// Jotai store for every `.ve-regex` block (`ve-regex-entry.tsx` →
+// `createStore()` per render call), so making these atoms instead of
+// module-level arrays keeps each graph's history isolated. With the
+// previous module-level arrays, pressing Cmd+Z on one graph would
+// pop entries pushed by a sibling graph and corrupt its AST.
+export const undoStackAtom = atom<AST.Regex[]>([])
+export const redoStackAtom = atom<AST.Regex[]>([])
 export const nodesBoxMap: Map<
   string,
   { x1: number, y1: number, x2: number, y2: number }[]
