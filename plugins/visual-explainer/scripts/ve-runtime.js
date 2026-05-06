@@ -427,6 +427,50 @@
       '[data-ve-snippet-popup] button + button {',
       '  margin-left:6px; background:transparent; color:#fff;',
       '  border:1px solid rgba(255,255,255,0.18); font-weight:500;',
+      '}',
+      // ─── Phase 5: table row/column handles ────────────────────────────
+      // Wrapper provides a 24-px phantom hit-zone outside the table so
+      // mouse can reach the handles before drifting fully out.
+      '.ve-table-wrapper {',
+      '  position:relative; display:inline-block;',
+      '  padding:24px; margin:-12px;',
+      '}',
+      '.ve-table-handles-overlay {',
+      '  position:absolute; inset:24px; pointer-events:none;',
+      '}',
+      '.ve-table-handle {',
+      '  position:absolute; width:22px; height:22px;',
+      '  background:color-mix(in srgb, var(--ve-accent, #b8861f) 18%, transparent);',
+      '  color:var(--ve-accent, #b8861f);',
+      '  border:1px solid color-mix(in srgb, var(--ve-accent, #b8861f) 70%, transparent);',
+      '  border-radius:6px;',
+      '  font:600 11px/20px ui-monospace,Menlo,monospace; text-align:center;',
+      '  cursor:pointer; opacity:0; pointer-events:auto;',
+      '  transition:opacity 140ms ease, background 120ms ease, transform 120ms ease;',
+      '  user-select:none;',
+      '}',
+      '.ve-table-wrapper:hover .ve-table-handle { opacity:0.55; }',
+      '.ve-table-handle:hover { opacity:1; transform:scale(1.08); }',
+      '.ve-table-handle[data-ve-pressed="1"] {',
+      '  opacity:1;',
+      '  background:var(--ve-accent, #b8861f);',
+      '  color:var(--ve-sel-text, #14110b);',
+      '  box-shadow:inset 0 1.5px 2.5px rgba(0,0,0,0.32);',
+      '}',
+      '.ve-table-handle--row-left  { transform:translate(-100%, -50%); padding-right:1px; }',
+      '.ve-table-handle--row-right { transform:translate(0, -50%);     padding-left:1px;  }',
+      '.ve-table-handle--column-top    { transform:translate(-50%, -100%); padding-bottom:1px; }',
+      '.ve-table-handle--column-bottom { transform:translate(-50%, 0);     padding-top:1px;    }',
+      '.ve-table-handle--row-left:hover  { transform:translate(-100%, -50%) scale(1.12); }',
+      '.ve-table-handle--row-right:hover { transform:translate(0, -50%) scale(1.12); }',
+      '.ve-table-handle--column-top:hover    { transform:translate(-50%, -100%) scale(1.12); }',
+      '.ve-table-handle--column-bottom:hover { transform:translate(-50%, 0) scale(1.12); }',
+      // Selected row/column highlight on the table cells themselves.
+      // Row uses an attribute on the <tr>; column uses dynamic per-table
+      // CSS rules emitted by ensureColumnHighlightSheet().
+      'tr[data-ve-row-selected="1"] > td,',
+      'tr[data-ve-row-selected="1"] > th {',
+      '  background:color-mix(in srgb, var(--ve-accent, #b8861f) 18%, transparent) !important;',
       '}'
     ].join('\n');
     document.head.appendChild(s);
@@ -824,6 +868,10 @@
       clearAllTextSelections();
       veSelection.length = 0;
       repaintSelectedElements();
+      // Phase 5: clear table-handle pressed states + row/col highlights
+      // (the function reads veSelection — now empty — so every handle
+      // resets to its default state and column CSS rules are emptied).
+      if (typeof repaintTableHandles === 'function') repaintTableHandles();
       // Reset multi-click chain so the next click starts depth=1.
       lastClickChain = null;
       ev.preventDefault();
@@ -3495,6 +3543,271 @@
     });
   }
 
+  // ─────────────────────────────────────────────────────────────────────
+  // Phase 5 — table row / column handles.
+  //
+  // Per TRDD-7a98 §3.6: every <table> reached by the prose / table-form
+  // scanner gets a hover overlay with four small handle buttons:
+  //
+  //   ◀ row left, ▶ row right        — toggle the entire row
+  //   ▼ col top,  ▲ col bottom       — toggle the entire column
+  //
+  // Click toggles a kind:'row' or kind:'column' entry. Multiple rows
+  // and columns are independent (no per-cell entries at intersections).
+  // Clicking individual cells does NOT deselect handles — you must
+  // re-click the handle.
+  //
+  // Tables that ARE table-form questionnaires (data-ve-type="table-form")
+  // are skipped — their own row-click handlers own that surface.
+  // ─────────────────────────────────────────────────────────────────────
+
+  function tableHandlesId(table) {
+    var existing = table.getAttribute('data-ve-id');
+    if (existing) return existing;
+    var fresh = 've-table-' + Math.random().toString(36).slice(2, 8);
+    table.setAttribute('data-ve-id', fresh);
+    return fresh;
+  }
+
+  function ensureColumnHighlightSheet() {
+    var s = document.getElementById('__ve-table-col-styles');
+    if (s) return s;
+    s = document.createElement('style');
+    s.id = '__ve-table-col-styles';
+    document.head.appendChild(s);
+    return s;
+  }
+
+  function repaintColumnHighlights() {
+    // Build a single rules string from every kind:'column' entry. Each
+    // selected (table, col) becomes:
+    //   table[data-ve-id="X"] tr > td:nth-child(N),
+    //   table[data-ve-id="X"] tr > th:nth-child(N) { background: ...; }
+    var s = ensureColumnHighlightSheet();
+    var lines = [];
+    for (var i = 0; i < veSelection.length; i++) {
+      var e = veSelection[i];
+      if (e.kind !== 'column') continue;
+      var sel = 'table[data-ve-id="' + e.table + '"] tr > td:nth-child(' + e.col + '),'
+              + 'table[data-ve-id="' + e.table + '"] tr > th:nth-child(' + e.col + ')';
+      lines.push(sel + ' { background: color-mix(in srgb, var(--ve-accent, #b8861f) 18%, transparent) !important; }');
+    }
+    s.textContent = lines.join('\n');
+  }
+
+  function repaintTableHandles() {
+    // Walk every handle and set [data-ve-pressed] based on whether its
+    // row/col index appears in veSelection for the table it belongs to.
+    var handles = document.querySelectorAll('.ve-table-handle');
+    for (var i = 0; i < handles.length; i++) {
+      var h = handles[i];
+      var tableId = h.getAttribute('data-ve-table-id');
+      var kind = h.getAttribute('data-ve-handle-kind');
+      var idx = parseInt(h.getAttribute('data-ve-handle-index'), 10);
+      var pressed = false;
+      for (var j = 0; j < veSelection.length; j++) {
+        var e = veSelection[j];
+        if (e.kind !== kind) continue;
+        if (e.table !== tableId) continue;
+        if (kind === 'row' && e.row === idx) { pressed = true; break; }
+        if (kind === 'column' && e.col === idx) { pressed = true; break; }
+      }
+      if (pressed) h.setAttribute('data-ve-pressed', '1');
+      else h.removeAttribute('data-ve-pressed');
+    }
+    // Row highlights via data-ve-row-selected on each <tr>.
+    var allRows = document.querySelectorAll('table[data-ve-id] tbody > tr');
+    for (var r = 0; r < allRows.length; r++) {
+      var row = allRows[r];
+      var table = row.closest('table');
+      if (!table) continue;
+      var tid = table.getAttribute('data-ve-id');
+      var rowIdx = -1;
+      var trs = table.querySelectorAll('tbody > tr');
+      for (var k = 0; k < trs.length; k++) {
+        if (trs[k] === row) { rowIdx = k + 1; break; }
+      }
+      var sel = false;
+      for (var m = 0; m < veSelection.length; m++) {
+        var ent = veSelection[m];
+        if (ent.kind === 'row' && ent.table === tid && ent.row === rowIdx) { sel = true; break; }
+      }
+      if (sel) row.setAttribute('data-ve-row-selected', '1');
+      else row.removeAttribute('data-ve-row-selected');
+    }
+    repaintColumnHighlights();
+  }
+
+  function tableHeaderTexts(table) {
+    var headerRow = table.querySelector('thead > tr')
+                 || table.querySelector('tr');
+    if (!headerRow) return [];
+    var out = [];
+    for (var i = 0; i < headerRow.children.length; i++) {
+      out.push((headerRow.children[i].textContent || '').replace(/\s+/g, ' ').trim());
+    }
+    return out;
+  }
+
+  function rowLabelFor(row) {
+    // Use the first cell's text as the row label — common for matrix
+    // tables where the leftmost column is a row name.
+    var first = row.children[0];
+    if (!first) return null;
+    return (first.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80) || null;
+  }
+
+  function toggleRowSelection(tableId, rowIdx, label) {
+    var entryId = 'row:' + tableId + ':' + rowIdx;
+    for (var i = 0; i < veSelection.length; i++) {
+      if (veSelection[i].entryId === entryId) {
+        veSelection.splice(i, 1);
+        repaintTableHandles();
+        updateSubmitButtonsState();
+        return;
+      }
+    }
+    veSelection.push({
+      kind: 'row',
+      entryId: entryId,
+      table: tableId,
+      row: rowIdx,
+      header: label || null
+    });
+    repaintTableHandles();
+    updateSubmitButtonsState();
+  }
+
+  function toggleColumnSelection(tableId, colIdx, header) {
+    var entryId = 'col:' + tableId + ':' + colIdx;
+    for (var i = 0; i < veSelection.length; i++) {
+      if (veSelection[i].entryId === entryId) {
+        veSelection.splice(i, 1);
+        repaintTableHandles();
+        updateSubmitButtonsState();
+        return;
+      }
+    }
+    veSelection.push({
+      kind: 'column',
+      entryId: entryId,
+      table: tableId,
+      col: colIdx,
+      header: header || null
+    });
+    repaintTableHandles();
+    updateSubmitButtonsState();
+  }
+
+  function makeHandle(symbol, kind, idx, tableId, side) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 've-table-handle ve-table-handle--' + kind + '-' + side;
+    btn.textContent = symbol;
+    btn.setAttribute('data-ve-table-id', tableId);
+    btn.setAttribute('data-ve-handle-kind', kind);
+    btn.setAttribute('data-ve-handle-index', String(idx));
+    btn.setAttribute('aria-label',
+      (kind === 'row' ? 'Toggle row ' : 'Toggle column ') + idx);
+    return btn;
+  }
+
+  function repositionHandles(table, overlay) {
+    overlay.innerHTML = '';
+    var tableId = table.getAttribute('data-ve-id');
+    if (!tableId) return;
+    var overlayRect = overlay.getBoundingClientRect();
+    var bodyRows = table.querySelectorAll('tbody > tr');
+    if (!bodyRows.length) bodyRows = table.querySelectorAll('tr');
+    if (!bodyRows.length) return;
+    var headers = tableHeaderTexts(table);
+    var firstRow = bodyRows[0];
+    var colCount = firstRow.children.length;
+
+    // Row handles (◀ and ▶ at each row's vertical centre).
+    for (var r = 0; r < bodyRows.length; r++) {
+      var row = bodyRows[r];
+      var rect = row.getBoundingClientRect();
+      var top = rect.top - overlayRect.top + (rect.height / 2);
+      var rowIdx = r + 1;
+      var rowLabel = rowLabelFor(row);
+
+      var leftH = makeHandle('◀', 'row', rowIdx, tableId, 'left');
+      leftH.style.top = top + 'px';
+      leftH.style.left = (rect.left - overlayRect.left - 6) + 'px';
+      (function (idx, lbl) {
+        leftH.addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); toggleRowSelection(tableId, idx, lbl); });
+      })(rowIdx, rowLabel);
+      overlay.appendChild(leftH);
+
+      var rightH = makeHandle('▶', 'row', rowIdx, tableId, 'right');
+      rightH.style.top = top + 'px';
+      rightH.style.left = (rect.right - overlayRect.left + 6) + 'px';
+      (function (idx, lbl) {
+        rightH.addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); toggleRowSelection(tableId, idx, lbl); });
+      })(rowIdx, rowLabel);
+      overlay.appendChild(rightH);
+    }
+
+    // Column handles (▼ above, ▲ below) at each column's horizontal
+    // centre. Anchor against the first body row (where colspan effects
+    // are usually absent).
+    for (var c = 0; c < colCount; c++) {
+      var cell = firstRow.children[c];
+      var crect = cell.getBoundingClientRect();
+      var left = crect.left - overlayRect.left + (crect.width / 2);
+      var colIdx = c + 1;
+      var headerText = headers[c] || null;
+      var lastRow = bodyRows[bodyRows.length - 1];
+      var lastRect = lastRow.getBoundingClientRect();
+
+      var topH = makeHandle('▼', 'column', colIdx, tableId, 'top');
+      topH.style.left = left + 'px';
+      topH.style.top = (firstRow.getBoundingClientRect().top - overlayRect.top - 6) + 'px';
+      (function (idx, hdr) {
+        topH.addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); toggleColumnSelection(tableId, idx, hdr); });
+      })(colIdx, headerText);
+      overlay.appendChild(topH);
+
+      var bottomH = makeHandle('▲', 'column', colIdx, tableId, 'bottom');
+      bottomH.style.left = left + 'px';
+      bottomH.style.top = (lastRect.bottom - overlayRect.top + 6) + 'px';
+      (function (idx, hdr) {
+        bottomH.addEventListener('click', function (ev) { ev.preventDefault(); ev.stopPropagation(); toggleColumnSelection(tableId, idx, hdr); });
+      })(colIdx, headerText);
+      overlay.appendChild(bottomH);
+    }
+    repaintTableHandles();
+  }
+
+  function initTableHandles(table) {
+    if (table.__veHandlesInit) return;
+    if (table.matches('[data-ve-type="table-form"]')) return;
+    if (table.closest('[data-ve-type="table-form"]')) return;
+    table.__veHandlesInit = true;
+    tableHandlesId(table);
+    var wrapper = document.createElement('div');
+    wrapper.className = 've-table-wrapper';
+    table.parentNode.insertBefore(wrapper, table);
+    wrapper.appendChild(table);
+    var overlay = document.createElement('div');
+    overlay.className = 've-table-handles-overlay';
+    wrapper.appendChild(overlay);
+    repositionHandles(table, overlay);
+    if (typeof ResizeObserver !== 'undefined') {
+      var ro = new ResizeObserver(function () { repositionHandles(table, overlay); });
+      ro.observe(table);
+    }
+    window.addEventListener('resize', function () {
+      repositionHandles(table, overlay);
+    }, { passive: true });
+  }
+
+  function initAllTableHandles() {
+    var tables = document.querySelectorAll('table');
+    for (var i = 0; i < tables.length; i++) initTableHandles(tables[i]);
+  }
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {
       injectStyles();
@@ -3505,6 +3818,7 @@
       initAllProse();
       enhanceFocus();
       initAllTableForms();
+      initAllTableHandles();   // Phase 5
       setupSnippetSelection();
       setupMultiClickSelection();
     });
@@ -3517,6 +3831,7 @@
     initAllProse();
     enhanceFocus();
     initAllTableForms();
+    initAllTableHandles();
     setupSnippetSelection();
   }
 })();

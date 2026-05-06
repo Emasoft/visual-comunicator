@@ -319,6 +319,41 @@ A drag that crosses element boundaries (e.g. spans two paragraphs, or includes i
 3. Single click in p1 (multi-click depth 1) after a drag does NOT toggle the drag entry — it adds its own depth-1 entry next to it.
 4. ESC clears all drag and multi-click entries (`clearAllTextSelections` walks every `[data-ve-text-sel]`).
 
+#### Phase 5 — table row/column handles
+
+Every `<table>` that is **not** a table-form (`data-ve-type="table-form"`) is wrapped on init in a `.ve-table-wrapper` with an absolutely-positioned `.ve-table-handles-overlay`. Inside the overlay, four small handle buttons are rendered per body row + per column:
+
+| Handle | Position | Toggles |
+|--------|----------|---------|
+| `◀` | 6 px left of each `<tr>` | `kind:"row"` (1-based body-row index) |
+| `▶` | 6 px right of each `<tr>` | `kind:"row"` (same row) |
+| `▼` | 6 px above the column's first body cell | `kind:"column"` (1-based) |
+| `▲` | 6 px below the column's last body cell | `kind:"column"` (same column) |
+
+The wrapper carries an extra 24 px outer padding (with a -12 px margin to keep document flow) so the cursor reaches the handles before drifting fully out of the table's hit-zone.
+
+```json
+{ "kind": "row",    "table": "perm-matrix", "row": 3, "header": "MAINTAINER" }
+{ "kind": "column", "table": "perm-matrix", "col": 4, "header": "ADMIN" }
+```
+
+- `table` is the table's `data-ve-id` (auto-stamped if absent).
+- `row` / `col` are 1-based.
+- `header` is the first-cell text (rows) or the `<thead>` cell text (columns), trimmed and clamped to 80 chars.
+
+**Visual marking**: selected rows get `data-ve-row-selected="1"` on the `<tr>`, painted via the standard injected CSS rule. Selected columns drive a dynamic per-table `<style id="__ve-table-col-styles">` sheet that emits `tr > td:nth-child(N)` rules — one per selected column. Intersection cells appear with both tints overlaid; **they are not separate entries** (the agent reads "rows X + columns Y" and reasons about the intersection itself).
+
+**Toggle / persistence**: re-clicking the same handle removes the entry. ESC also clears every `kind:"row"` / `kind:"column"` entry (the global ESC handler calls `repaintTableHandles()` which iterates the now-empty `veSelection` and resets every handle's `[data-ve-pressed]`). Clicking inside individual cells does NOT deselect a row or column — that requires re-clicking the handle.
+
+**Layout**: the overlay uses `pointer-events: none` and the handles re-enable `pointer-events: auto`, so clicks on cells pass through the overlay normally. Handle positions are recomputed on `ResizeObserver` ticks and on `window.resize`.
+
+**Verified empirically** (2026-05-06) against `tests_dev/table-handles.html` (a 5×5 permission matrix):
+1. Click ◀ next to MAINTAINER → 1 entry, `row:3`, `header:"MAINTAINER"`.
+2. Click ▼ above ADMIN → second entry, `col:4`, `header:"ADMIN"`.
+3. Click ◀ next to VIEWER → third entry, `row:1`, `header:"VIEWER"`. Both VIEWER and MAINTAINER rows highlighted; ADMIN column highlighted; intersection cells doubly-tinted.
+4. Click ◀ next to MAINTAINER again → entry removed, row de-highlighted; VIEWER + ADMIN remain.
+5. ESC → all entries cleared, every `[data-ve-pressed]` reset, dynamic column CSS sheet emptied.
+
 **Timeout/error sentinels** (the runner emits these when no submission arrives or when something is structurally wrong) keep their old shape too: `{"id": null, "reason": "timeout|no-file|missing-file|no-browser|...", ...}`.
 
 ### Required follow-up
@@ -341,6 +376,8 @@ For per-entry kinds beyond `element`, branch a second time on the entry's own `k
 | `text`            | "You picked the snippet **«text»** (paragraph «paragraphId» at depth «depth»). What should I do with it?" |
 | `math` (depth 1-3)| "You picked the math fragment **«text»** inside the formula `«formulaLatex»`. What should I do with it?" |
 | `code` (depth 1-3)| "You picked **«text»** in the code block (`«language»`). What should I do with it?"                       |
+| `row`             | "You picked **row «row»** of table `«table»` (header «header»). What should I do with it?"                |
+| `column`          | "You picked **column «col»** of table `«table»` (header «header»). What should I do with it?"             |
 | `regex-edit`      | "You changed the regex from `«original»` to `«edited»`. Want me to update the test cases / explanation / surrounding code?" |
 
 `regex-edit` is special — it represents a USER-AUTHORED MUTATION rather than a click on an existing element. The `original` and `edited` strings + the `ast` give the agent everything needed to act on the change without re-prompting.
