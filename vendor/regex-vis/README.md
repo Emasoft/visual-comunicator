@@ -46,7 +46,7 @@ The plugin runtime (`ve-runtime.js`) lazy-loads `scripts/ve-regex.umd.js` + `scr
 
 - [x] Phase 0 — vendor source + LICENSE + skeleton package.json + vite.config + entry point
 - [x] Phase 1 — `npm install` and produce the first un-themed UMD bundle. Smoke test green: 484 KB / **151 KB gzipped**, renders the graph SVG correctly. See TRDD §12 for the five build adjustments.
-- [ ] Phase 2 — theme adapter: replace Tailwind classes with our CSS vars, swap fonts to Crimson Pro / JetBrains Mono. The current bundle has Tailwind class names baked in but no CSS for them, so foreignObject children render as black rectangles.
+- [x] Phase 2 — Tailwind compiles via PostCSS, theme tokens redefined to the plugin's gold/cream/coffee palette in `src/global.css`. Bundle now ships `ve-regex.css` (30 KB / 6 KB gz) sibling to the UMD. Light + dark mode both verified via dev-browser headless. See TRDD §14.
 - [ ] Phase 3 — runtime hook in `ve-runtime.js` for `.ve-regex[data-regex]`, wire edit-panel commit → `kind:"regex-edit"` in `veSelection`
 - [ ] Phase 4 — test page `tests_dev/regex-vis-test.html` + cookbook docs
 

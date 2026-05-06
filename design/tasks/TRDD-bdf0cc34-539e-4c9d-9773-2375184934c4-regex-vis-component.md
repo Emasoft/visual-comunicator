@@ -3,7 +3,7 @@
 **TRDD ID:** `bdf0cc34-539e-4c9d-9773-2375184934c4`
 **Filename:** `design/tasks/TRDD-bdf0cc34-539e-4c9d-9773-2375184934c4-regex-vis-component.md`
 **Tracked in:** this repo (design/tasks/ is git-tracked)
-**Status:** Phases 0 + 1 complete. Bundle builds and renders. Phase 2 (theme adapter) next.
+**Status:** Phases 0 + 1 + 2 complete. Bundle builds, renders, and is themed to the plugin palette. Phase 3 (ve-runtime integration) next.
 **Created:** 2026-05-05
 **Plugin:** visual-explainer
 
@@ -221,3 +221,35 @@ plugins/visual-explainer/scripts/
 ```
 
 That's the entire user-visible footprint of regex-vis in the plugin. End users `git clone` the plugin and immediately have a working bundle — no `npm install`, no build step.
+
+## 14. Phase 2 — themed to the plugin palette
+
+The cleanest path turned out NOT to be "search/replace 80 React files for Tailwind classes" but rather "compile Tailwind ourselves with our token defaults". The upstream uses shadcn/ui's HSL-token convention (`--background`, `--foreground`, `--primary`, `--accent`, …) and references those tokens via every Tailwind utility class. We:
+
+1. **Mirrored the token API in our own `tailwind.config.ts`** — same colour token NAMES (`background`, `foreground`, `primary`, `accent`, `graph`, `graph-group`, `graph-bg`, …) so no JSX is touched. Switched `darkMode` from upstream's class-driven (`['class']`) to `media` so the bundle follows `prefers-color-scheme` like the rest of the visual-explainer plugin. Added `fontFamily.{sans,mono}` overrides → Crimson Pro for body, JetBrains Mono for regex tokens.
+2. **Re-themed the token VALUES in `src/global.css`** — every `--*` token now resolves to the plugin's editorial gold/cream palette (light) or deep coffee + bright gold (dark). The three direct-colour graph tokens (`--graph`, `--graph-group`, `--graph-bg`) take the plugin's `--text` / `--text-dim` / a paper-on-paper tint — they're the visible bones of the SVG.
+3. **Wired PostCSS → Tailwind** via `postcss.config.js` so Vite compiles utility classes into `dist/ve-regex.css` during the lib build. The CSS file gets emitted because `ve-regex-entry.tsx` does a side-effect `import './global.css'`.
+
+Bundle math after Phase 2:
+- `dist/ve-regex.umd.js` 484 KB raw / **151 KB gz** (unchanged)
+- `dist/ve-regex.css` 30 KB raw / **6 KB gz** (NEW)
+- Combined gz: ~157 KB — still within decision §6 Q2's 150 KB target (the CSS is tiny).
+
+Visual verification (`tests_dev/regex-vis-smoke.html`, dev-browser headless, both colour schemes):
+- Light: cream paper background, dark warm-black node strokes, gold accents on the active tab, dashed borders for group containers, monospace regex tokens.
+- Dark: deep coffee background, light cream node strokes, brighter gold accents, same group-dash treatment.
+- Tabs (Legends / Edit / Test) styled correctly in both modes.
+- Graph topology unchanged from Phase 1.
+
+The only Phase-2 leak into upstream source: `src/constants/index.ts` keeps the JetBrains Mono hard-code from Phase 1 (no longer a stub — it's the production value).
+
+## 15. Files now in the plugin distribution (after Phase 2)
+
+```
+plugins/visual-explainer/scripts/
+  ve-regex.umd.js     484 KB  ← built artefact (151 KB gz)
+  ve-regex.css         30 KB  ← themed Tailwind output (6 KB gz)
+  ve-regex.LICENSE      1 KB  ← upstream MIT
+```
+
+Three files. Drop-in. The plugin is themed and ready for Phase 3 (the runtime hook that lazy-loads these on `.ve-regex[data-regex]`).

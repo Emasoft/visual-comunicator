@@ -15,6 +15,10 @@
 import React, { useEffect, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { Provider, createStore, useAtom, useAtomValue, useSetAtom } from 'jotai'
+// Phase 2: import the global CSS so Vite emits a sibling `ve-regex.css`
+// alongside the UMD bundle. The CSS file resolves Tailwind's @apply
+// directives + the visual-explainer plugin's themed `--*` token defaults.
+import './global.css'
 import Graph from './graph'
 import Editor from './editor'
 import { astAtom, clearSelectedAtom } from './atom'

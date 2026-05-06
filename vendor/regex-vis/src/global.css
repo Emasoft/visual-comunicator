@@ -1,0 +1,104 @@
+/*
+ * Themed `--*` tokens for the vendored regex-vis bundle.
+ *
+ * The upstream tailwind config maps every utility class to a token like
+ * `hsl(var(--background))`, `hsl(var(--accent))`, `var(--graph)`. We keep
+ * those exact token names so we don't have to touch any upstream JSX —
+ * but we redefine the values to plug in the `visual-explainer` plugin's
+ * editorial cream / gold palette. Light mode is cream paper + warm gold
+ * accent + dark text; dark mode flips to deep coffee + brighter gold.
+ *
+ * Two extra tokens propagate from the host page when present:
+ *   --ve-accent  -> consumed by the runtime's hover glow (also gold-ish)
+ *   --ve-sel-text -> high-contrast text colour for selected text
+ *
+ * If those are NOT set on the host page (e.g. user mounts the regex
+ * component on a non-visual-explainer page), we fall back to the same
+ * gold values. So the bundle is self-styling either way.
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* surface */
+    --background:           42 50% 95%;       /* cream #faf6ee */
+    --foreground:           28 16% 10%;       /* warm near-black #1f1a14 */
+    --card:                 42 50% 95%;
+    --card-foreground:      28 16% 10%;
+    --popover:              42 50% 95%;
+    --popover-foreground:   28 16% 10%;
+    /* muted / secondary surfaces */
+    --muted:                42 30% 88%;
+    --muted-foreground:     30 12% 38%;       /* #6b5d4a */
+    --secondary:            42 30% 88%;
+    --secondary-foreground: 28 16% 10%;
+    /* accent (gold) — shadcn calls this the "accent" surface */
+    --accent:               42 75% 88%;       /* very pale gold tint */
+    --accent-foreground:    28 16% 10%;
+    /* primary CTA — solid gold */
+    --primary:              41 72% 41%;       /* #b8861f gold */
+    --primary-foreground:   42 50% 95%;
+    /* destructive */
+    --destructive:          0 60% 45%;
+    --destructive-foreground: 0 0% 100%;
+    /* form chrome */
+    --border:               28 16% 80%;
+    --input:                28 16% 80%;
+    --ring:                 41 72% 41%;       /* gold focus ring */
+    --radius:               0.5rem;
+    /* graph (the SVG bones) */
+    --graph:                #1f1a14;          /* node strokes — body text */
+    --graph-group:          #6b5d4a;          /* group dashes — muted text */
+    --graph-bg:             #f1ebd9;          /* subtle paper-on-paper */
+    /* fall-back defaults for the runtime tokens (host page wins) */
+    --ve-accent:            #b8861f;
+    --ve-sel-text:          #14110b;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background:           33 17% 7%;       /* coffee #14110b */
+      --foreground:           37 36% 90%;      /* warm cream #ede5dd */
+      --card:                 33 17% 7%;
+      --card-foreground:      37 36% 90%;
+      --popover:              33 17% 7%;
+      --popover-foreground:   37 36% 90%;
+      --muted:                33 17% 14%;
+      --muted-foreground:     35 14% 60%;      /* #9c8e7a */
+      --secondary:            33 17% 14%;
+      --secondary-foreground: 37 36% 90%;
+      --accent:               45 40% 25%;      /* warm gold-tinted dark */
+      --accent-foreground:    37 36% 90%;
+      --primary:              48 65% 65%;      /* bright gold #e0bf5b */
+      --primary-foreground:   33 17% 7%;
+      --destructive:          0 60% 50%;
+      --destructive-foreground: 0 0% 100%;
+      --border:               33 17% 18%;
+      --input:                33 17% 18%;
+      --ring:                 48 65% 65%;
+      /* graph (the SVG bones — light glyphs on dark) */
+      --graph:                #ede5dd;         /* node strokes */
+      --graph-group:          #9c8e7a;         /* group dashes */
+      --graph-bg:             #1d1a12;         /* subtle paper-on-coffee */
+      --ve-accent:            #e0bf5b;
+      --ve-sel-text:          #14110b;
+    }
+  }
+}
+
+@layer base {
+  /* These two upstream rules apply our themed border + body colours to
+     every element in the bundle. They're the only @apply directives that
+     touch element selectors directly. */
+  .ve-regex-app *,
+  .ve-regex-app *::before,
+  .ve-regex-app *::after {
+    @apply border-border;
+  }
+  .ve-regex-app {
+    @apply bg-background text-foreground font-sans;
+  }
+}
