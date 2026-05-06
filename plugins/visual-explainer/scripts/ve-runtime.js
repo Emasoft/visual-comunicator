@@ -898,6 +898,13 @@
       // Inside a table-form, the form's own handlers manage row toggling
       // and submission — never auto-select on bare row click.
       if (isInsideTableForm(ev.target)) return;
+      // Inside a .ve-regex wrapper, the React graph + edit panel own all
+      // clicks. The pushRegexEdit() hook is the only path to push a
+      // regex-related selection (kind:'regex-edit' on edit-panel commit).
+      // Without this guard, clicking any glyph inside the regex graph
+      // would bubble up and add a duplicate kind:'element' entry for
+      // the wrapper, which has data-ve-id auto-stamped on mount.
+      if (ev.target.closest('.ve-regex')) return;
       // Phase 2: inside [data-ve-prose], clicks on text content go to the
       // multi-click handler (handleProseClick at bubble phase) instead of
       // toggling the whole paragraph. The .ve-pnum number marker still
@@ -926,6 +933,9 @@
       var t = document.activeElement;
       if (!t || !t.matches || !t.matches('[data-ve-id]')) return;
       if (isInteractiveControl(t)) return;
+      // Same exclusion as the click handler: regex wrappers are owned
+      // by the embedded React app, never by the bare element-toggle.
+      if (t.closest && t.closest('.ve-regex')) return;
       var sel = elementSelection(t);
       if (!sel || !sel.id) return;
       ev.preventDefault();
@@ -984,11 +994,15 @@
   // Make any [data-ve-id] focusable for keyboard users unless the author
   // already set tabindex (defer to authoring intent in those cases).
   function enhanceFocus() {
-    var els = document.querySelectorAll('[data-ve-id]:not([data-ve-type="table-form"]):not([tabindex])');
+    var els = document.querySelectorAll('[data-ve-id]:not([data-ve-type="table-form"]):not([data-ve-type="regex"]):not([tabindex])');
     for (var i = 0; i < els.length; i++) {
       // Skip nodes that contain a table-form — the form's own controls
       // are tabbable and should not double up.
       if (els[i].querySelector && els[i].querySelector('[data-ve-type="table-form"]')) continue;
+      // Skip regex wrappers — the embedded React app exposes its own
+      // tab-stops (input box, panel buttons). Adding a wrapper-level
+      // tabindex would steal focus to a non-interactive parent first.
+      if (els[i].matches && els[i].matches('.ve-regex')) continue;
       els[i].setAttribute('tabindex', '0');
       if (!els[i].hasAttribute('role')) els[i].setAttribute('role', 'button');
     }
