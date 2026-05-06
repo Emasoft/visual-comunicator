@@ -288,6 +288,37 @@ The descendant `color: inherit` is critical when Prism / highlight.js are loaded
 
 **Verified empirically** (2026-05-05) against `tests_dev/prose-code-depths-1-7.html`: clicking the `i` of `fib` in `function fib(n) { … }` 7 times at 200 ms intervals produced d1=`fib`, d2=`function fib(n) {`, d3=full Fibonacci block, d4=section 1.1.1 (3 paragraphs around the `<pre>`), d5=section 1.1, d6=chapter 1, d7=all 7 numbered elements.
 
+#### Phase 4 — drag text selection toggles entries (the only deselect path)
+
+Standard browser text drag (mouse-down, drag, mouse-up) works alongside the multi-click depths. Per TRDD §3.5:
+
+- **Drag inside `[data-ve-prose]` (and not inside `.ve-math` / `.ve-tikz`)** captures the highlighted Range on `mouseup`. The popup is bypassed.
+- **Match key**: trimmed-and-collapsed text content + `paragraphId`. If both candidate and existing entry have a `paragraphId` they must match; if either is `null` (e.g. a paragraph the prose numberer skipped), match by text alone.
+- **If a match exists** → REMOVE the existing entry (and unwrap its DOM marker). This is the **only** path that deselects a text entry.
+- **If no match** → ADD a new `kind:"text"` entry with `depth:"drag"` and paint a `<span class="ve-text-sel ve-text-sel--drag">` around the range.
+
+Multi-click depths 1-7 are still **add-only** — re-clicking the same word never deselects. Only drag deselects.
+
+```json
+{
+  "kind": "text",
+  "depth": "drag",
+  "text": "quick brown fox",
+  "paragraphId": "1.1",
+  "paragraphText": "1.1 The quick brown fox jumps over the lazy dog. …"
+}
+```
+
+A drag that crosses element boundaries (e.g. spans two paragraphs, or includes inline children) falls back to `Range.extractContents()` + `Range.insertNode()` so the wrapping span always succeeds — `surroundContents` would otherwise throw.
+
+`.ve-math` / `.ve-tikz` drags still go through the snippet popup → `postSelection()` single-shot path, because their domain-specific payloads (`fullFormulaLatex`, `fullDiagramLatex`, `chem` flag) haven't been multi-select-converted yet.
+
+**Verified empirically** (2026-05-06) against `tests_dev/prose-drag-toggle.html`:
+1. Drag-select "quick brown" in p1 → 1 entry, `depth:"drag"`, `paragraphId:"1.1"`.
+2. Drag-select the same painted span → entry count returns to 0, span removed from DOM.
+3. Single click in p1 (multi-click depth 1) after a drag does NOT toggle the drag entry — it adds its own depth-1 entry next to it.
+4. ESC clears all drag and multi-click entries (`clearAllTextSelections` walks every `[data-ve-text-sel]`).
+
 **Timeout/error sentinels** (the runner emits these when no submission arrives or when something is structurally wrong) keep their old shape too: `{"id": null, "reason": "timeout|no-file|missing-file|no-browser|...", ...}`.
 
 ### Required follow-up

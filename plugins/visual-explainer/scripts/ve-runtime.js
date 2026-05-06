@@ -3228,16 +3228,131 @@
     document.addEventListener('click', handleProseClick, false);
   }
 
+  // ─────────────────────────────────────────────────────────────────────
+  // Phase 4 — drag text selection toggles existing entries.
+  //
+  // Per TRDD §3.5: standard browser drag still works. On mouseup after a
+  // drag, the highlighted Range is captured. If it matches an existing
+  // kind:'text' entry → REMOVE (deselect). Otherwise → ADD a new entry.
+  // This is the ONLY path that can DESELECT a text entry — multi-click
+  // depths 1-7 always ADD.
+  //
+  // Scope: prose only. Drag inside .ve-math / .ve-tikz still falls
+  // through to the snippet popup → POST single-shot path because those
+  // payloads carry domain-specific context (LaTeX source, TikZ source,
+  // chem flag) that hasn't been multi-select-converted yet.
+  //
+  // Match key: normalized text content + paragraph id (when both have
+  // one). This avoids false collisions across paragraphs that happen to
+  // share a common phrase.
+  // ─────────────────────────────────────────────────────────────────────
+
+  function findDragMatchTextEntry(text, pnum) {
+    var normalized = (text || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return -1;
+    for (var i = 0; i < veSelection.length; i++) {
+      var e = veSelection[i];
+      if (e.kind !== 'text') continue;
+      var eText = (e.text || '').replace(/\s+/g, ' ').trim();
+      if (eText !== normalized) continue;
+      // If both sides have a paragraph id, they must match. If either is
+      // null, accept — this lets a drag in an unnumbered paragraph still
+      // toggle a previously-saved entry of the same text.
+      if (e.paragraphId && pnum && e.paragraphId !== pnum) continue;
+      return i;
+    }
+    return -1;
+  }
+
+  function paintDragTextSelection(range) {
+    var paraEl = paragraphFromNode(range.startContainer)
+              || paragraphFromNode(range.endContainer);
+    var entryId = 'text:' + Date.now() + ':' + Math.random().toString(36).slice(2, 8);
+    var span = document.createElement('span');
+    span.className = 've-text-sel ve-text-sel--drag';
+    span.setAttribute('data-ve-text-sel', entryId);
+    try {
+      range.surroundContents(span);
+    } catch (e) {
+      // Range crosses element boundaries (e.g. spans paragraphs or
+      // contains inline children). extractContents + insertNode always
+      // works — the visual highlight looks the same.
+      var frag = range.extractContents();
+      span.appendChild(frag);
+      range.insertNode(span);
+    }
+    var text = (span.textContent || '').replace(/\s+/g, ' ').trim();
+    var pnum = paraEl && paraEl.getAttribute ? paraEl.getAttribute('data-ve-pnum') : null;
+    var paraText = paraEl ? (paraEl.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 240) : null;
+    veSelection.push({
+      kind: 'text',
+      entryId: entryId,
+      text: text,
+      depth: 'drag',
+      paragraphId: pnum,
+      paragraphText: paraText
+    });
+    updateSubmitButtonsState();
+    return entryId;
+  }
+
+  function handleProseDragSelection() {
+    var sel = window.getSelection();
+    if (!sel || sel.isCollapsed) return false;
+    var text = sel.toString();
+    if (!text || text.replace(/\s+/g, '').length < 1) return false;
+    var range;
+    try { range = sel.getRangeAt(0); } catch (_) { return false; }
+    if (!range) return false;
+    var anchor = range.commonAncestorContainer;
+    var anchorEl = anchor.nodeType === 3 ? anchor.parentElement : anchor;
+    if (!anchorEl || !anchorEl.closest) return false;
+    // Skip drags inside our own UI surfaces.
+    if (anchorEl.closest('[data-ve-overlay], [data-ve-snippet-popup], button, input, textarea, select')) return false;
+    // Phase 4 owns prose drag only. Math/TikZ drag stays on the popup
+    // path so their domain-specific snippet payloads keep working.
+    var prose = anchorEl.closest('[data-ve-prose]');
+    var math = anchorEl.closest('.ve-math, [data-ve-math]');
+    var tikz = anchorEl.closest('.ve-tikz, [data-ve-tikz]');
+    if (!prose || math || tikz) return false;
+    var paraEl = paragraphFromNode(range.startContainer)
+              || paragraphFromNode(range.endContainer);
+    var pnum = paraEl && paraEl.getAttribute ? paraEl.getAttribute('data-ve-pnum') : null;
+    var matchIdx = findDragMatchTextEntry(text, pnum);
+    if (matchIdx >= 0) {
+      // Toggle off: remove the existing entry (and its DOM marker).
+      var existing = veSelection[matchIdx];
+      removeChainSelection(existing.entryId);
+      sel.removeAllRanges();
+      clearSnippetPopup();
+      return true;
+    }
+    // Toggle on: paint + push new entry.
+    paintDragTextSelection(range);
+    sel.removeAllRanges();
+    clearSnippetPopup();
+    return true;
+  }
+
   function setupSnippetSelection() {
     document.addEventListener('mouseup', function (ev) {
       // Defer so the selection state has settled.
       if (ev.target.closest('[data-ve-snippet-popup], [data-ve-overlay]')) return;
-      setTimeout(showSnippetPopup, 30);
+      setTimeout(function () {
+        // Phase 4: prose drag toggles a kind:'text' entry directly. If
+        // it handled the drag, the snippet popup is bypassed. Math and
+        // TikZ drags still fall through to the popup → POST flow.
+        if (handleProseDragSelection()) return;
+        showSnippetPopup();
+      }, 30);
     });
     document.addEventListener('keyup', function (ev) {
       if (ev.shiftKey || ev.key === 'Shift') return;
-      // Selection via keyboard nav: refresh popup on key release.
-      setTimeout(showSnippetPopup, 30);
+      // Selection via keyboard nav: same Phase 4 → popup fallback chain.
+      setTimeout(function () {
+        if (handleProseDragSelection()) return;
+        showSnippetPopup();
+      }, 30);
     });
     document.addEventListener('mousedown', function (ev) {
       if (snippetPopup && !ev.target.closest('[data-ve-snippet-popup]')) {
