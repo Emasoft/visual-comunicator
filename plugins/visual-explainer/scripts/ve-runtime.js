@@ -380,29 +380,51 @@
       // weak afterthought. The opacity stays modest (0.55) so the marker
       // still recedes when the reader is focused on the prose; hover
       // brightens it to 0.95 to confirm it\'s clickable.
+      // Numbering marker is INLINE — same font as the text it precedes,
+      // no border, no background, no monospace shift. The reader sees
+      // "1.1.2 The Report" as one phrase, not as a UI badge attached to
+      // a heading. Color slightly dimmed (0.75) so the prose dominates
+      // visually but the marker is still readable. The trailing space
+      // is part of the marker so word-spacing flows naturally.
       '.ve-pnum {',
-      '  display:inline-block; vertical-align:baseline;',
-      '  font:700 1.05em/1 ui-monospace,Menlo,Consolas,monospace;',
-      '  color:currentColor; opacity:0.55;',
-      '  margin-right:0.6em; padding:2px 7px;',
-      '  border:1.5px solid currentColor; border-radius:5px;',
+      '  display:inline; font:inherit; color:currentColor; opacity:0.75;',
+      '  margin:0; padding:0; border:0; background:none;',
       '  text-decoration:none; user-select:none;',
       '  transition:opacity 120ms ease;',
       '}',
-      '.ve-pnum:hover { opacity:0.95; }',
+      '.ve-pnum:hover { opacity:1; text-decoration:underline dotted; }',
+      '.ve-pnum::after { content:" "; }',
       // Depth-based paragraph indentation. The numberProse() function
       // stamps data-ve-pdepth (1..N) alongside data-ve-pnum; CSS keys
       // off it to indent each paragraph proportionally to its hierarchy
-      // level. Unit is REM (root-relative) — using `em` would couple the
-      // tab width to the element\'s own font-size, so an h2 at depth 2
-      // would indent more than a p at the same depth. Rem keeps a depth
-      // tab visually identical regardless of the element\'s typography.
-      '[data-ve-prose] [data-ve-pdepth="1"] { margin-left: 1.5rem; }',
-      '[data-ve-prose] [data-ve-pdepth="2"] { margin-left: 3rem; }',
-      '[data-ve-prose] [data-ve-pdepth="3"] { margin-left: 4.5rem; }',
-      '[data-ve-prose] [data-ve-pdepth="4"] { margin-left: 6rem; }',
-      '[data-ve-prose] [data-ve-pdepth="5"] { margin-left: 7.5rem; }',
-      '[data-ve-prose] [data-ve-pdepth="6"] { margin-left: 9rem; }',
+      // level. One-character (1ch) per depth level — narrower than a
+      // tab, just enough to suggest hierarchy without burning horizontal
+      // real estate. ch unit is "width of the 0 glyph in the current
+      // font" which matches the user\'s "1 char" intuition.
+      '[data-ve-prose] [data-ve-pdepth="1"] { margin-left: 1ch; }',
+      '[data-ve-prose] [data-ve-pdepth="2"] { margin-left: 2ch; }',
+      '[data-ve-prose] [data-ve-pdepth="3"] { margin-left: 3ch; }',
+      '[data-ve-prose] [data-ve-pdepth="4"] { margin-left: 4ch; }',
+      '[data-ve-prose] [data-ve-pdepth="5"] { margin-left: 5ch; }',
+      '[data-ve-prose] [data-ve-pdepth="6"] { margin-left: 6ch; }',
+      // Vertical breathing room between numbered paragraphs. ~2 lines
+      // (1.4em ≈ 1.5 line-heights) so the eye groups each paragraph
+      // distinctly. Headings get more space above to anchor sections.
+      '[data-ve-prose] [data-ve-pnum] { margin-top: 1.4em; margin-bottom: 0.6em; }',
+      '[data-ve-prose] h1[data-ve-pnum] { margin-top: 2.2em; margin-bottom: 0.8em; }',
+      '[data-ve-prose] h2[data-ve-pnum] { margin-top: 2em;   margin-bottom: 0.7em; }',
+      '[data-ve-prose] h3[data-ve-pnum] { margin-top: 1.8em; margin-bottom: 0.6em; }',
+      '[data-ve-prose] h4[data-ve-pnum] { margin-top: 1.6em; margin-bottom: 0.5em; }',
+      // Heading sizes — H1 / H2 / H3 visibly different so the user
+      // perceives section depth at a glance. From H4 the gap shrinks
+      // because the reader is already deep enough to lose track of
+      // visual hierarchy and rely on numbering instead.
+      '[data-ve-prose] h1 { font-size: 2em;   font-weight: 600; line-height: 1.25; }',
+      '[data-ve-prose] h2 { font-size: 1.55em; font-weight: 600; line-height: 1.3; }',
+      '[data-ve-prose] h3 { font-size: 1.25em; font-weight: 600; line-height: 1.35; }',
+      '[data-ve-prose] h4 { font-size: 1.1em;  font-weight: 600; line-height: 1.4; }',
+      '[data-ve-prose] h5 { font-size: 1.05em; font-weight: 600; line-height: 1.4; }',
+      '[data-ve-prose] h6 { font-size: 1em;    font-weight: 600; line-height: 1.4; font-style: italic; }',
       // The injected hover/selected outline adds an extra 8px padding.
       // Since we now use margin-left for indent, the inset box-shadow
       // still fires from the paragraph\'s left edge — exactly what the
@@ -3454,46 +3476,64 @@
       // for math it clears the [data-ve-math-sel] attribute. The dispatch
       // is by entryId prefix — see removeChainSelection.
       if (lastClickChain.entryId) removeChainSelection(lastClickChain.entryId);
-      lastClickChain.depth = Math.min(lastClickChain.depth + 1, 7);
+      lastClickChain.depth = Math.min(lastClickChain.depth + 1, 8);
     } else {
+      // SHIFTED-BY-1 grammar (revised 2026-05-06): the FIRST click in a
+      // chain DOES NOT select anything — it just registers the start.
+      // The 2nd click within 500 ms is the first one that paints (depth
+      // 1 = letter), the 3rd paints depth 2 = word, and so on up to
+      // depth 7 (= depth=8 in the chain counter). This matches a
+      // double-click conventionally selecting a word: a single click is
+      // cursor-only, the second click is the first selection action.
       lastClickChain = {x: clickX, y: clickY, depth: 1, entryId: null, time: now};
+      // First click never paints. Schedule a watchdog so the chain can
+      // also auto-expire on its own (the proximity-and-time check above
+      // already prunes stale chains, but resetting the entry helps tests).
+      lastClickChain.depth = 1; // sentinel for "no paint yet"
+      lastClickChain.firstClickOnly = true;
+      return; // no selection action on the very first click of a chain
     }
+    // From the 2nd click onward, depth is (chainCount - 1) clamped to 7.
+    // The chain counter (lastClickChain.depth) ranges 1..8; selection
+    // depth ranges 1..7. This is the only place we apply the shift.
+    var visualDepth = Math.min(lastClickChain.depth - 1, 7);
+    if (visualDepth < 1) return; // belt-and-braces — never paint at depth 0
     var entryId = null;
     if (isMathClick) {
       // Math grammar (depths 1-3 = atom/group/formula; depths 4-7 fall
       // through to the prose block path on the surrounding paragraph).
-      if (lastClickChain.depth <= 3) {
-        entryId = paintMathSelection(mathEl, clickX, clickY, lastClickChain.depth);
+      if (visualDepth <= 3) {
+        entryId = paintMathSelection(mathEl, clickX, clickY, visualDepth);
       } else {
         var mathPara = mathEl.closest('[data-ve-pnum]');
         var mathPnum = mathPara && mathPara.getAttribute ? mathPara.getAttribute('data-ve-pnum') : null;
         if (mathPnum) {
           var melements;
-          if (lastClickChain.depth === 7) {
+          if (visualDepth === 7) {
             melements = Array.from(document.querySelectorAll('[data-ve-prose] [data-ve-pnum]'));
           } else {
-            var mscope = pnumScope(mathPnum, lastClickChain.depth);
+            var mscope = pnumScope(mathPnum, visualDepth);
             melements = elementsInPnumScope(mscope);
           }
-          entryId = paintBlockSelection(melements, lastClickChain.depth);
+          entryId = paintBlockSelection(melements, visualDepth);
         } else {
           // No numbered paragraph around the formula — degrade to depth 3
           // (whole formula).
           entryId = paintMathSelection(mathEl, clickX, clickY, 3);
-          if (entryId) lastClickChain.depth = 3;
+          if (entryId) lastClickChain.depth = 4; // chain counter = depth+1
         }
       }
     } else if (isCodeClick) {
       // Code grammar (depths 1-3 = token/line/whole-block; depths 4-7
       // fall through to the prose block path on the surrounding paragraph,
       // identical to the math fallthrough).
-      if (lastClickChain.depth === 1) {
+      if (visualDepth === 1) {
         var tokenRange = codeTokenAtPoint(clickX, clickY, preEl);
         if (tokenRange) entryId = paintCodeInlineSelection(tokenRange, 1);
-      } else if (lastClickChain.depth === 2) {
+      } else if (visualDepth === 2) {
         var lineRange = codeLineRangeAt(clickX, clickY, preEl);
         if (lineRange) entryId = paintCodeInlineSelection(lineRange, 2);
-      } else if (lastClickChain.depth === 3) {
+      } else if (visualDepth === 3) {
         entryId = paintCodeBlockSelection(preEl);
       } else {
         // For depths 4-7 from a code click: find the [data-ve-pnum] anchor.
@@ -3516,18 +3556,18 @@
         var codePnum = codePara && codePara.getAttribute ? codePara.getAttribute('data-ve-pnum') : null;
         if (codePnum) {
           var celements;
-          if (lastClickChain.depth === 7) {
+          if (visualDepth === 7) {
             celements = Array.from(document.querySelectorAll('[data-ve-prose] [data-ve-pnum]'));
           } else {
-            var cscope = pnumScope(codePnum, lastClickChain.depth);
+            var cscope = pnumScope(codePnum, visualDepth);
             celements = elementsInPnumScope(cscope);
           }
-          entryId = paintBlockSelection(celements, lastClickChain.depth);
+          entryId = paintBlockSelection(celements, visualDepth);
         } else {
           // No numbered paragraph anywhere — degrade to depth 3 (whole
           // code block).
           entryId = paintCodeBlockSelection(preEl);
-          if (entryId) lastClickChain.depth = 3;
+          if (entryId) lastClickChain.depth = 4;
         }
       }
     } else {
@@ -3541,28 +3581,28 @@
       var textNode = pos.node;
       var idx = pos.offset;
       var range = null;
-      if (lastClickChain.depth <= 3) {
-        if (lastClickChain.depth === 1)      range = buildLetterRange(textNode, idx);
-        else if (lastClickChain.depth === 2) range = buildWordRange(textNode, idx);
-        else                                  range = buildBlockRange(textNode, idx);
+      if (visualDepth <= 3) {
+        if (visualDepth === 1)      range = buildLetterRange(textNode, idx);
+        else if (visualDepth === 2) range = buildWordRange(textNode, idx);
+        else                         range = buildBlockRange(textNode, idx);
         if (!range) return;
-        entryId = paintTextSelection(range, lastClickChain.depth, target);
+        entryId = paintTextSelection(range, visualDepth, target);
       } else {
         var paraEl = paragraphFromNode(textNode);
         var pnum = paraEl && paraEl.getAttribute ? paraEl.getAttribute('data-ve-pnum') : null;
         if (!pnum) {
           range = buildBlockRange(textNode, idx);
           if (range) entryId = paintTextSelection(range, 3, target);
-          if (entryId) lastClickChain.depth = 3;
+          if (entryId) lastClickChain.depth = 4;
         } else {
           var elements;
-          if (lastClickChain.depth === 7) {
+          if (visualDepth === 7) {
             elements = Array.from(document.querySelectorAll('[data-ve-prose] [data-ve-pnum]'));
           } else {
-            var scope = pnumScope(pnum, lastClickChain.depth);
+            var scope = pnumScope(pnum, visualDepth);
             elements = elementsInPnumScope(scope);
           }
-          entryId = paintBlockSelection(elements, lastClickChain.depth);
+          entryId = paintBlockSelection(elements, visualDepth);
         }
       }
     }
